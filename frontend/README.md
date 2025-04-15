@@ -34,3 +34,15 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+
+## Steps to Setup Project
+
+Create a `.env.local` file and fill in:
+```
+NEXT_PUBLIC_COGNITO_AUTHORITY=https://cognito-idp.<region>.amazonaws.com/<>
+NEXT_PUBLIC_COGNITO_CLIENT_ID=<CLIENT_ID>
+NEXT_PUBLIC_COGNITO_REDIRECT_URI=http://localhost:3000/auth/callback
+NEXT_PUBLIC_COGNITO_LOGOUT_URI=http://localhost:3000/
+NEXT_PUBLIC_COGNITO_DOMAIN=https://<domain_id>.auth.us-east-1.amazoncognito.com
+```
