@@ -1,0 +1,13 @@
+{
+    "resource": "/user/{id}",
+    "path": "/user/user1",
+    "httpMethod": "DELETE",
+    "pathParameters": {
+      "id": "user1"
+    },
+    "headers": {},
+    "queryStringParameters": null,
+    "body": null,
+    "isBase64Encoded": false
+  }
+  
