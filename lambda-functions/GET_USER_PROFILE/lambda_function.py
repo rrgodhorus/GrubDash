@@ -1,21 +1,18 @@
-import boto3
-import json
-
-dynamodb = boto3.resource('dynamodb')
-table = dynamodb.Table('Users')
+from utils import get_table, to_json
 
 def lambda_handler(event, context):
     user_id = event['pathParameters']['id']
+    table = get_table()
 
     response = table.get_item(Key={'user_id': user_id})
 
     if 'Item' in response:
         return {
             'statusCode': 200,
-            'body': json.dumps(response['Item'])
+            'body': to_json(response['Item'])  # 🔥 Clean and consistent
         }
     else:
         return {
             'statusCode': 404,
-            'body': json.dumps({'message': 'User not found'})
+            'body': to_json({'message': 'User not found'})
         }
