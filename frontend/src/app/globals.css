@@ -14,9 +14,16 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
+    --background: #FFF7ED;
     --foreground: #ededed;
   }
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background-color: #FFF7ED; /* Matches the bg-orange-50 color */
+  min-height: 100%;
 }
 
 body {
