@@ -1,0 +1,15 @@
+{
+    "resource": "/user/{id}",
+    "path": "/user/user1",
+    "httpMethod": "PUT",
+    "pathParameters": {
+      "id": "user1"
+    },
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "queryStringParameters": null,
+    "body": "{ \"default_address_id\": \"addr2\" }",
+    "isBase64Encoded": false
+  }
+  

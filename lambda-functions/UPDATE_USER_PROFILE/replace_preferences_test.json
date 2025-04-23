@@ -1,0 +1,15 @@
+{
+    "resource": "/user/{id}",
+    "path": "/user/user1",
+    "httpMethod": "PUT",
+    "pathParameters": {
+      "id": "user1"
+    },
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "queryStringParameters": null,
+    "body": "{ \"preferences\": { \"favorite_cuisines\": [\"Japanese\", \"Italian\"], \"dietary_restrictions\": [\"vegan\"], \"spice_level\": \"low\", \"default_tip_percent\": 15, \"contactless_delivery\": true } }",
+    "isBase64Encoded": false
+  }
+  

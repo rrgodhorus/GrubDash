@@ -1,0 +1,15 @@
+{
+    "resource": "/user/{id}",
+    "path": "/user/user1",
+    "httpMethod": "PUT",
+    "pathParameters": {
+      "id": "user1"
+    },
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "queryStringParameters": null,
+    "body": "{ \"user_name\": \"Alice Updated\", \"phone\": \"9876543210\" }",
+    "isBase64Encoded": false
+  }
+  

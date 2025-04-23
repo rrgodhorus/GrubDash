@@ -1,0 +1,15 @@
+{
+    "resource": "/user/{id}",
+    "path": "/user/user1",
+    "httpMethod": "PUT",
+    "pathParameters": {
+      "id": "user1"
+    },
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "queryStringParameters": null,
+    "body": "{ \"addresses\": [ { \"address_id\": \"addr3\", \"label\": \"New Home\", \"street\": \"789 Ocean Dr\", \"city\": \"Queens\", \"zip\": \"11377\" }, { \"address_id\": \"addr4\", \"label\": \"Cottage\", \"street\": \"456 Lakeview\", \"city\": \"Albany\", \"zip\": \"12207\" } ] }",
+    "isBase64Encoded": false
+  }
+  
