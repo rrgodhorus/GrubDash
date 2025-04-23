@@ -1,0 +1,121 @@
+openapi: 3.0.1
+info:
+  title: Order Management API
+  description: API for managing orders in a DoorDash-style food delivery system
+  version: 1.0.0
+
+paths:
+  /orders:
+    post:
+      summary: Place a new order
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user_id, restaurant_id, items]
+              properties:
+                user_id:
+                  type: string
+                restaurant_id:
+                  type: string
+                items:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      name:
+                        type: string
+                      qty:
+                        type: integer
+      responses:
+        200:
+          description: Order placed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  order_id:
+                    type: string
+
+  /orders/{id}:
+    get:
+      summary: Get order status
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Order details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  order_id:
+                    type: string
+                  user_id:
+                    type: string
+                  restaurant_id:
+                    type: string
+                  status:
+                    type: string
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                        qty:
+                          type: integer
+        404:
+          description: Order not found
+
+  /orders/{id}/status:
+    put:
+      summary: Update order status
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [Accepted, Cooking, Out for Delivery, Delivered]
+      responses:
+        200:
+          description: Status updated
+        403:
+          description: Invalid status change
+
+  /orders/{id}/cancel:
+    put:
+      summary: Cancel an order
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Order cancelled
+        403:
+          description: Order already being processed
+        404:
+          description: Order not found
