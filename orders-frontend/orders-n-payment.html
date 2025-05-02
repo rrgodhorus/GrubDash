@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Place Order & Pay</title>
+  <script src="https://js.stripe.com/v3/"></script>
+  <link rel="stylesheet" href="style.css">
+</head>
+<!-- 
+✅ Stripe Test Card Numbers (Use in test mode only)
+
+🟢 Successful Payments:
+- Visa:              4242 4242 4242 4242
+- MasterCard:        5555 5555 5555 4444
+- American Express:  3782 822463 10005  (4-digit CVC)
+- Discover:          6011 1111 1111 1117
+- Visa Debit:        4000 0000 0000 0077
+
+🔴 Failed Payments:
+- Insufficient Funds:     4000 0000 0000 0341
+- Generic Decline:        4000 0000 0000 0002
+- Incorrect CVC:          4000 0000 0000 0101
+- Processing Error:       4000 0000 0000 0119
+
+💡 Use any future expiry (e.g., 12/29) and any CVC (e.g., 123 or 1234 for Amex)
+-->
+<body>
+<div class="container">
+  <h2>Place Your Order</h2>
+
+  <label for="restaurant-id">Restaurant ID</label>
+  <input type="text" id="restaurant-id" value="res_123">
+
+  <label for="items">Order Items (JSON format)</label>
+  <textarea id="items" rows="3">[{"name": "Burger", "price": 9.99}, {"name": "Fries", "price": 3.99}]</textarea>
+
+  <div class="summary" id="order-summary">Total: $0.00</div>
+
+  <label for="saved-card">Use saved card (optional)</label>
+  <select id="saved-card">
+    <option value="">-- Saved Cards --</option>
+  </select>
+
+  <label for="saved-card">Enter new card below</label>
+  <div id="card-element"></div>
+
+  <div id="save-card-wrapper">
+    <label>
+      <input type="checkbox" id="save-card" />
+      Save card for future use
+    </label>
+  </div>  
+
+  <div class="spinner" id="loading-spinner">
+    <img src="https://i.imgur.com/llF5iyg.gif" alt="Loading...">
+  </div>
+  
+  <button id="submit-button">Submit Order & Pay</button>
+
+  <div class="success hidden" id="success-message">✅ Payment successful!</div>
+  <div class="error hidden" id="error-message">❌ Payment failed.</div>
+</div>
+
+<script src="payment.js"></script>
+
+</body>
+</html>
