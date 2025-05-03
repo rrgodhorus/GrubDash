@@ -39,11 +39,78 @@ interface Restaurant {
   menu: MenuItem[];
 }
 
-interface Restaurants {
-  [key: string]: Restaurant;
+// API response interfaces
+interface ApiMenuItem {
+  name: string;
+  description: string;
+  category: string;
+  item_id: string;
+  image_url: string;
+  price: string;
 }
 
-const sampleMenus: Restaurants = {
+interface ApiRestaurant {
+  userId: string;
+  name: string;
+  email: string;
+  address?: string;
+  location_coordinates?: {
+    latitude: string;
+    longitude: string;
+  };
+  createdAt?: string;
+  menu?: ApiMenuItem[];
+}
+
+// API Gateway configuration
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://93x8qdh8rd.execute-api.us-east-1.amazonaws.com/Dev';
+
+// Service for API calls
+const restaurantService = {
+  async getRestaurantById(restaurantId: string): Promise<Restaurant | null> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/users/${restaurantId}`);
+      
+      if (!response.ok) {
+        throw new Error(`Error fetching restaurant: ${response.statusText}`);
+      }
+      
+      const data: ApiRestaurant = await response.json();
+      
+      // Transform API menu items to our MenuItem type
+      const transformedMenu: MenuItem[] = data.menu 
+        ? data.menu.map(item => ({
+            id: item.item_id,
+            category: item.category,
+            name: item.name,
+            price: `$${item.price}`, // Add $ symbol if not present
+            description: item.description,
+            image: item.image_url || '/sample-image-1.jpg',
+          }))
+        : [];
+      
+      // Transform API data to our Restaurant type
+      return {
+        name: data.name || 'Unknown Restaurant',
+        location: data.location_coordinates 
+          ? `${data.location_coordinates.latitude}, ${data.location_coordinates.longitude}`
+          : 'Unknown Location',
+        rating: 4.0, // Default as rating isn't in the API response
+        address: data.address || 'Address not available',
+        deliveryTime: '30-45 min', // Default as not in API response
+        pickupDistance: '0.5 mi', // Default as not in API response
+        pickupTime: '10-15 min', // Default as not in API response
+        menu: transformedMenu,
+      };
+    } catch (error) {
+      console.error('Failed to fetch restaurant:', error);
+      return null;
+    }
+  }
+};
+
+// Fallback sample data in case the API is not available
+const sampleMenus: { [key: string]: Restaurant } = {
   "r1": {
     name: 'Italian Bistro',
     location: 'Downtown',
@@ -99,7 +166,7 @@ export default function MenuPage() {
   const auth = useAuth();
   const searchParams = useSearchParams();
   const restaurantId = searchParams.get('id') || '';
-  const restaurantData = restaurantId ? sampleMenus[restaurantId] : null;
+  const [restaurantData, setRestaurantData] = useState<Restaurant | null>(null);
   const menu = restaurantData?.menu || [];
 
   const [cart, setCart] = useState<Cart>({});
@@ -116,6 +183,18 @@ export default function MenuPage() {
     const price = parseFloat(item.price.replace('$', ''));
     return total + price * item.quantity;
   }, 0).toFixed(2);
+
+  // Fetch restaurant data
+  useEffect(() => {
+    async function fetchRestaurant() {
+      const data = await restaurantService.getRestaurantById(restaurantId);
+      setRestaurantData(data || sampleMenus[restaurantId]);
+    }
+
+    if (restaurantId) {
+      fetchRestaurant();
+    }
+  }, [restaurantId]);
 
   // Handle initial hydration - load cart from localStorage only on client side
   useEffect(() => {
@@ -426,7 +505,7 @@ export default function MenuPage() {
                       height={80}
                       className="object-cover rounded-lg mb-2"
                     />
-                    {cart[item.id] ? (
+                    {cart[item.id] && storedRestaurantId === restaurantId ? (
                       <div className="flex items-center border border-gray-200 rounded-md">
                         <button
                           className="px-2 py-1 text-orange-500 hover:text-orange-600"
