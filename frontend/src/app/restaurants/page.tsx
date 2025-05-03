@@ -2,17 +2,20 @@
 
 import React, { useState } from 'react';
 import Image from 'next/image';
+import Link from 'next/link';
 import "../globals.css";
 
 const popularRestaurants = [
   {
-    name: 'Sushi Place',
+    id: "r1",
+    name: 'Italian Bistro',
     image: '/sample-image-1.jpg',
-    cuisine: 'Japanese',
+    cuisine: 'Italian',
     rating: 4.7,
     time: '30-40 min',
   },
   {
+    id: "r2",
     name: 'Pizza Palace',
     image: '/sample-image-2.jpg',
     cuisine: 'Italian',
@@ -20,6 +23,7 @@ const popularRestaurants = [
     time: '20-30 min',
   },
   {
+    id: "r3",
     name: 'Burger Joint',
     image: '/sample-image-3.png',
     cuisine: 'American',
@@ -30,6 +34,7 @@ const popularRestaurants = [
 
 const newArrivals = [
   {
+    id: "r4",
     name: 'Taco Town',
     image: '/grubdash-image-1.png',
     cuisine: 'Mexican',
@@ -37,6 +42,7 @@ const newArrivals = [
     time: '30-40 min',
   },
   {
+    id: "r5",
     name: 'Curry House',
     image: '/grubdash-image-1.png',
     cuisine: 'Indian',
@@ -44,6 +50,7 @@ const newArrivals = [
     time: '35-45 min',
   },
   {
+    id: "r6",
     name: 'Vegan Delight',
     image: '/grubdash-image-1.png',
     cuisine: 'Vegan',
@@ -65,7 +72,9 @@ function RestaurantCard({ restaurant }: { restaurant: any }) {
           <span className="mr-2">⭐ {restaurant.rating}</span>
           <span>• {restaurant.time}</span>
         </div>
-        <button className="mt-2 w-full bg-orange-600 text-white py-1.5 rounded-lg font-semibold hover:bg-orange-700 transition">View Menu</button>
+        <Link href={`/restaurants/menu?id=${restaurant.id}`} passHref>
+          <button className="mt-2 w-full bg-orange-600 text-white py-1.5 rounded-lg font-semibold hover:bg-orange-700 transition">View Menu</button>
+        </Link>
       </div>
     </div>
   );
