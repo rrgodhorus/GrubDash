@@ -1,8 +1,7 @@
 "use client";
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
-import Link from 'next/link';
 import { useAuth } from 'react-oidc-context';
 
 // Define types for menu items and cart
@@ -161,7 +160,8 @@ const sampleMenus: { [key: string]: Restaurant } = {
   },
 };
 
-export default function MenuPage() {
+// Create a client component that uses search params
+function MenuContent() {
   const router = useRouter();
   const auth = useAuth();
   const searchParams = useSearchParams();
@@ -568,5 +568,18 @@ export default function MenuPage() {
         </div>
       )}
     </main>
+  );
+}
+
+// Main page component with Suspense boundary
+export default function MenuPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-orange-500"></div>
+      </div>
+    }>
+      <MenuContent />
+    </Suspense>
   );
 }
