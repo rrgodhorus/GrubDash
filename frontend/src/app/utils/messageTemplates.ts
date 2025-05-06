@@ -10,6 +10,8 @@ export interface OrderMessage {
   orderId: string;       
   restaurantId?: string;  
   items?: Item[];
+  status?: string;
+  timestamp?: string;
 }
 
 /**
