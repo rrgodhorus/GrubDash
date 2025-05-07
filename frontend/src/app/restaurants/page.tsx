@@ -232,9 +232,15 @@ export default function Restaurants() {
           onSubmit={async (e) => {
             e.preventDefault();
             setIsLoading(true);
-            const results = await restaurantService.searchRestaurants(searchQuery, location);
-            setRestaurants(results.length > 0 ? results : restaurantsFallback);
-            setIsLoading(false);
+            try {
+              const results = await restaurantService.searchRestaurants(searchQuery, location);
+              setRestaurants(results);
+            } catch (error) {
+              console.error("Search failed, using fallback:", error);
+              setRestaurants(restaurantsFallback);
+            } finally {
+              setIsLoading(false);
+            }
           }}
         >
           <input
