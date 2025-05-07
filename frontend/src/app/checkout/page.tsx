@@ -8,6 +8,7 @@ import {
   useElements
 } from "@stripe/react-stripe-js";
 import { useAuth } from "react-oidc-context";
+import { useRouter } from "next/navigation";
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL!;
@@ -48,6 +49,7 @@ function CheckoutForm() {
   const stripe = useStripe();
   const elements = useElements();
   const auth = useAuth();
+  const router = useRouter();
   const userProfile = auth.user?.profile;
   const userId = userProfile?.["cognito:username"];
   const userRole = userProfile?.["custom:user_role"];
@@ -60,6 +62,7 @@ function CheckoutForm() {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
+  const [orderId, setOrderId] = useState<string | null>(null);
 
   useEffect(() => {
     const cartRaw = localStorage.getItem("cart");
@@ -83,6 +86,18 @@ function CheckoutForm() {
     }
   }, [userId]);
 
+  // Redirect to order tracking page if payment was successful
+  useEffect(() => {
+    if (success && orderId) {
+      // Give a small delay so user can see the success message
+      const redirectTimer = setTimeout(() => {
+        router.push(`/tracking?id=${orderId}`);
+      }, 1500);
+      
+      return () => clearTimeout(redirectTimer);
+    }
+  }, [success, orderId, router]);
+
   const handleSubmit = async () => {
     if (!stripe || !elements) return;
 
@@ -105,7 +120,8 @@ function CheckoutForm() {
         })
       });
 
-      const { clientSecret } = await res.json();
+      const { clientSecret, order_id } = await res.json();
+      setOrderId(order_id); // Store the order ID for redirection
 
       const cardElement = elements.getElement(CardElement);
       const result = await stripe.confirmCardPayment(clientSecret, {

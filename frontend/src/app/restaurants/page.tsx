@@ -177,6 +177,7 @@ export default function Restaurants() {
   const [locError, setLocError] = useState<string | null>(null);
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [address, setAddress] = useState<string>('');
 
   // Added: Search state
   const [searchQuery, setSearchQuery] = useState('');
@@ -187,10 +188,38 @@ export default function Restaurants() {
       return;
     }
     navigator.geolocation.getCurrentPosition(
-      (position) => setLocation({ lat: position.coords.latitude, lng: position.coords.longitude }),
+      (position) => {
+        const newLocation = { lat: position.coords.latitude, lng: position.coords.longitude };
+        setLocation(newLocation);
+        
+        // Call reverseGeocode when location is updated
+        reverseGeocode(newLocation.lat, newLocation.lng)
+          .then(formattedAddress => {
+            setAddress(formattedAddress);
+          })
+          .catch(err => {
+            console.error("Geocoding error:", err);
+            setAddress("Address unavailable");
+          });
+      },
       () => setLocError('Unable to retrieve your location.')
     );
   };
+
+  const reverseGeocode = (lat: number, lng: number): Promise<string> => {
+    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+    return fetch(
+      `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${apiKey}`
+    )
+      .then(res => res.json())
+      .then(data => {
+        if (data.status === "OK") {
+          return data.results[0].formatted_address;
+        } else {
+          throw new Error("Geocoding failed");
+        }
+      });
+  }
 
   useEffect(() => {
     getLocation();
@@ -209,6 +238,7 @@ export default function Restaurants() {
       }
     };
     fetchRestaurants();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
@@ -216,13 +246,14 @@ export default function Restaurants() {
       <h1 className="text-4xl font-extrabold text-gray-900 mb-8 text-center">Explore Restaurants</h1>
 
       <div className="mb-6 flex flex-col items-center gap-2">
-        <button
+        {/* <button
           className="bg-orange-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-orange-700 transition"
           onClick={getLocation}
         >
           Get My Location
-        </button>
-        {location && <div className="text-green-700 text-sm">Location: {location.lat.toFixed(4)}, {location.lng.toFixed(4)}</div>}
+        </button> */}
+        {/* {location && <div className="text-green-700 text-sm">Location: {location.lat.toFixed(4)}, {location.lng.toFixed(4)}</div>} */}
+        {location && <div className="text-green-700 text-sm">Location: {address}</div>}
         {locError && <div className="text-red-600 text-sm">{locError}</div>}
       </div>
 
