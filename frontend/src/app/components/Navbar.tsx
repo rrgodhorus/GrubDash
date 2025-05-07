@@ -58,6 +58,7 @@ export default function Navbar() {
       <nav className="flex space-x-4">
         {auth.isAuthenticated && (role == "customer") && <Link href="/restaurants" className="text-gray-700 hover:text-orange-600">Restaurants</Link>}
         {auth.isAuthenticated && (role == "restaurant") && <Link href="/orders" className="text-gray-700 hover:text-orange-600">Orders</Link>}
+        {auth.isAuthenticated && (role == "delivery_partner") && <Link href="/deliveries" className="text-gray-700 hover:text-orange-600">Deliveries</Link>}
         {/* <a href="#" className="text-gray-700 hover:text-orange-600">Deals</a> */}
         {/* <a href="#" className="text-gray-700 hover:text-orange-600">About Us</a> */}
         {/* <a href="#" className="text-gray-700 hover:text-orange-600">Help</a> */}
