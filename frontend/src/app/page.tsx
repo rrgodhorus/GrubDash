@@ -16,6 +16,8 @@ export default function Home() {
         router.push('/restaurants');
       } else if(role == "restaurant") {
         router.push('/orders');
+      } else if(role == "delivery_partner") {
+        router.push("/deliveries");
       }
     }
   }, [auth.isAuthenticated, auth.user?.profile, router]);
