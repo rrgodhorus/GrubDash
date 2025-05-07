@@ -80,7 +80,8 @@ const restaurantService = {
 // Hardcoded restaurant IDs (normally these would come from OpenSearch)
 const restaurantIds = [
   "uvQM9dckyv8RZB3hQYrKKw",
-  "WZLhPYaYSFy7M_-Jh1VuNw"
+  "WZLhPYaYSFy7M_-Jh1VuNw",
+  "54e83468-3021-7050-01e5-12a82c111031"
 ];
 
 // Fallback sample data in case the API is not available

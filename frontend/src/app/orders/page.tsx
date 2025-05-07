@@ -1,13 +1,44 @@
 "use client";
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import { OrderMessage, isValidOrderMessage } from "../utils/messageTemplates";
+import { useAuth } from "react-oidc-context";
 
 const WEBSOCKET_URL = "wss://5g5tej9zt6.execute-api.us-east-1.amazonaws.com/production";
-const RECONNECT_INTERVAL = 3000; // Try to reconnect every 3 seconds
 const HEARTBEAT_INTERVAL = 30000; // Send heartbeat every 30 seconds
+const LOCAL_STORAGE_KEY = "grubdash_orders";
 
-// Order status for visual indication - we'll randomly assign these for now
-const STATUS_OPTIONS = ["Received", "Preparing", "Ready", "Delivered"];
+// Define order status options
+const ORDER_STATUS = {
+  PENDING_CONFIRMATION: "PENDING_CONFIRMATION",
+  CONFIRMED: "CONFIRMED",  // This now represents the preparing stage
+  READY: "READY",
+  DELIVERED: "DELIVERED",
+  CANCELLED: "CANCELLED"
+};
+
+// Function to get item name from localStorage
+const getItemNameFromLocalStorage = (itemId: string | undefined): string | null => {
+  if (!itemId) return null;
+  try {
+    // Get user details from localStorage with the key "user_details"
+    const userDetailsString = localStorage.getItem("user_details");
+    
+    if (userDetailsString) {
+      const userDetails = JSON.parse(userDetailsString);
+      // Check if this user data contains menu information
+      if (userDetails.menu && Array.isArray(userDetails.menu)) {
+        // Find the menu item by ID
+        const menuItem = userDetails.menu.find(item => item.item_id === itemId);
+        if (menuItem && menuItem.name) {
+          return menuItem.name;
+        }
+      }
+    }
+  } catch (error) {
+    console.error("Error retrieving item name from localStorage:", error);
+  }
+  return null;
+};
 
 export default function OrderUpdatesPage() {
   const [orders, setOrders] = useState<OrderMessage[]>([]);
@@ -17,8 +48,37 @@ export default function OrderUpdatesPage() {
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const heartbeatIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const reconnectCountRef = useRef(0);
+  
+  // Get auth context at component level
+  const auth = useAuth();
+  // Store restaurantId in a ref to prevent unnecessary reconnections
+  const restaurantIdRef = useRef<string>('');
+  
+  // Only update the ref when auth.user changes and has a valid sub
+  useEffect(() => {
+    if (auth.user?.profile.sub) {
+      restaurantIdRef.current = auth.user.profile.sub;
+    }
+  }, [auth.user?.profile.sub]);
 
-  // Function to connect WebSocket
+  // Load orders from localStorage on initial render
+  useEffect(() => {
+    try {
+      const savedOrders = localStorage.getItem(LOCAL_STORAGE_KEY);
+      if (savedOrders) {
+        setOrders(JSON.parse(savedOrders));
+      }
+    } catch (error) {
+      console.error("Error loading orders from localStorage:", error);
+    }
+  }, []);
+
+  // Save orders to localStorage whenever they change
+  useEffect(() => {
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(orders));
+  }, [orders]);
+
+  // Function to connect WebSocket - no longer depends on restaurantId
   const connectWebSocket = useCallback(() => {
     // Clear any existing connection
     if (socketRef.current) {
@@ -29,15 +89,21 @@ export default function OrderUpdatesPage() {
     setConnectionError(null);
     
     try {
-      // In a real app, the restaurant ID would come from authentication
-      const restaurantId = "r1"; // This would be dynamically set from auth
+      // Use the ref value here instead of the prop
+      const currentRestaurantId = restaurantIdRef.current;
       
+      // Don't attempt connection without a valid restaurantId
+      if (!currentRestaurantId) {
+        console.log("No restaurant ID available yet, delaying connection");
+        return;
+      }
+
       // Ensure the restaurantId is properly URL encoded and included in query params
-      const socket = new WebSocket(`${WEBSOCKET_URL}?restaurantId=${encodeURIComponent(restaurantId)}`);
+      const socket = new WebSocket(`${WEBSOCKET_URL}?restaurantId=${encodeURIComponent(currentRestaurantId)}`);
       socketRef.current = socket;
 
       socket.onopen = () => {
-        console.log("WebSocket connected");
+        console.log("WebSocket connected for restaurant:", currentRestaurantId);
         setIsConnected(true);
         reconnectCountRef.current = 0; // Reset reconnect counter on successful connection
         
@@ -67,13 +133,21 @@ export default function OrderUpdatesPage() {
           }
           
           if (isValidOrderMessage(msg)) {
-            // Assign a random status for visualization purposes
-            const enhancedMsg = {
+            // Set all new orders to PENDING_CONFIRMATION status
+            const newOrder = {
               ...msg,
-              status: STATUS_OPTIONS[Math.floor(Math.random() * STATUS_OPTIONS.length)],
+              status: ORDER_STATUS.PENDING_CONFIRMATION,
               timestamp: new Date().toLocaleTimeString()
             };
-            setOrders(prev => [enhancedMsg, ...prev]);
+            
+            // Check if order already exists to avoid duplicates
+            setOrders(prev => {
+              const orderExists = prev.some(order => order.orderId === newOrder.orderId);
+              if (orderExists) {
+                return prev;
+              }
+              return [newOrder, ...prev];
+            });
           } else {
             console.log("Received non-order message:", msg);
           }
@@ -91,36 +165,40 @@ export default function OrderUpdatesPage() {
           clearInterval(heartbeatIntervalRef.current);
         }
         
-        // If we've tried to reconnect too many times, show an error
-        if (reconnectCountRef.current >= 5) {
-          setConnectionError("Unable to connect after multiple attempts. The server may be down or unreachable.");
-        }
+        // Show a connection error but don't automatically reconnect
+        setConnectionError("Connection closed. Click 'Reconnect' to try again.");
         
-        // Schedule reconnection with exponential backoff
-        const backoffTime = Math.min(RECONNECT_INTERVAL * Math.pow(1.5, reconnectCountRef.current), 30000);
-        console.log(`Scheduling reconnection attempt in ${backoffTime}ms...`);
-        
-        reconnectTimeoutRef.current = setTimeout(() => {
-          reconnectCountRef.current++;
-          console.log(`Attempting to reconnect (attempt ${reconnectCountRef.current})...`);
-          connectWebSocket();
-        }, backoffTime);
+        // No longer scheduling automatic reconnection
+        // Rely on manual reconnect button instead
       };
 
       socket.onerror = (err) => {
         console.error("WebSocket error", err);
         setIsConnected(false);
-        setConnectionError("Connection error. The server may be unreachable.");
+        setConnectionError("Connection error. The server may be unreachable. Click 'Reconnect' to try again.");
       };
     } catch (err) {
       console.error("Error creating WebSocket:", err);
       setConnectionError("Failed to establish connection. Please try again later.");
     }
-  }, []);
+  }, []); // No dependencies for more stability
 
+  // Connect or reconnect when restaurant ID changes or user logs in
   useEffect(() => {
-    // Connect when the component mounts
-    connectWebSocket();
+    if (auth.user?.profile.sub && auth.user.profile.sub !== restaurantIdRef.current) {
+      // Only reconnect if the ID actually changed
+      console.log("Restaurant ID changed, reconnecting WebSocket");
+      restaurantIdRef.current = auth.user.profile.sub;
+      connectWebSocket();
+    }
+  }, [auth.user?.profile.sub, connectWebSocket]);
+
+  // Initial connection effect
+  useEffect(() => {
+    // Only connect if we have a valid restaurant ID
+    if (restaurantIdRef.current) {
+      connectWebSocket();
+    }
 
     // Clean up when component unmounts
     return () => {
@@ -138,13 +216,135 @@ export default function OrderUpdatesPage() {
     };
   }, [connectWebSocket]);
 
+  // Function to handle order confirmation
+  const confirmOrder = (orderId: string) => {
+    // Get the API base URL from environment variable with fallback
+    const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
+    
+    // Send PUT request to update order status
+    fetch(`${apiBaseUrl}/orders/${orderId}/status`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ status: "order_confirmed" }),
+    })
+      .then(response => {
+        if (!response.ok) {
+          throw new Error(`Failed to update order status: ${response.status} ${response.statusText}`);
+        }
+        return response.json();
+      })
+      .then(data => {
+        console.log('Order status updated successfully:', data);
+        // Update local state after successful API call
+        setOrders(prevOrders => 
+          prevOrders.map(order => 
+            order.orderId === orderId 
+              ? { ...order, status: ORDER_STATUS.CONFIRMED } 
+              : order
+          )
+        );
+      })
+      .catch(error => {
+        console.error('Error updating order status:', error);
+        alert('Failed to update order status. Please try again.');
+      });
+  };
+
+  // Function to update order status (READY, etc.)
+  const updateOrderStatus = (orderId: string, newStatus: string) => {
+    // Get the API base URL from environment variable with fallback
+    const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
+    
+    // Map internal status to API status format
+    let apiStatus = "";
+    switch(newStatus) {
+      case ORDER_STATUS.READY:
+        apiStatus = "ready_for_delivery";
+        break;
+      case ORDER_STATUS.DELIVERED:
+        apiStatus = "delivered";
+        break;
+      default:
+        apiStatus = newStatus.toLowerCase();
+    }
+    
+    // Send PUT request to update order status
+    fetch(`${apiBaseUrl}/orders/${orderId}/status`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ status: apiStatus }),
+    })
+      .then(response => {
+        if (!response.ok) {
+          throw new Error(`Failed to update order status: ${response.status} ${response.statusText}`);
+        }
+        return response.json();
+      })
+      .then(data => {
+        console.log('Order status updated successfully:', data);
+        // Update local state after successful API call
+        setOrders(prevOrders => 
+          prevOrders.map(order => 
+            order.orderId === orderId 
+              ? { ...order, status: newStatus } 
+              : order
+          )
+        );
+      })
+      .catch(error => {
+        console.error('Error updating order status:', error);
+        alert('Failed to update order status. Please try again.');
+      });
+  };
+
+  // Function to handle order cancellation
+  const cancelOrder = (orderId: string) => {
+    // Get the API base URL from environment variable with fallback
+    const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
+    
+    // Send PUT request to update order status
+    fetch(`${apiBaseUrl}/orders/${orderId}/status`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ status: "order_cancelled" }),
+    })
+      .then(response => {
+        if (!response.ok) {
+          throw new Error(`Failed to cancel order: ${response.status} ${response.statusText}`);
+        }
+        return response.json();
+      })
+      .then(data => {
+        console.log('Order cancelled successfully:', data);
+        // Update local state after successful API call
+        setOrders(prevOrders => 
+          prevOrders.map(order => 
+            order.orderId === orderId 
+              ? { ...order, status: ORDER_STATUS.CANCELLED } 
+              : order
+          )
+        );
+      })
+      .catch(error => {
+        console.error('Error cancelling order:', error);
+        alert('Failed to cancel order. Please try again.');
+      });
+  };
+
   // Function to get status color based on status
   const getStatusColor = (status: string) => {
     switch(status) {
-      case "Received": return "bg-blue-100 text-blue-800";
-      case "Preparing": return "bg-yellow-100 text-yellow-800";
-      case "Ready": return "bg-green-100 text-green-800";
-      case "Delivered": return "bg-purple-100 text-purple-800";
+      case ORDER_STATUS.PENDING_CONFIRMATION: return "bg-yellow-100 text-yellow-800";
+      case ORDER_STATUS.CONFIRMED: return "bg-indigo-100 text-indigo-800";
+      case ORDER_STATUS.READY: return "bg-green-100 text-green-800";
+      case ORDER_STATUS.DELIVERED: return "bg-purple-100 text-purple-800";
+      case ORDER_STATUS.CANCELLED: return "bg-red-100 text-red-800";
       default: return "bg-gray-100 text-gray-800";
     }
   };
@@ -205,7 +405,7 @@ export default function OrderUpdatesPage() {
             </div>
             <div className="ml-3">
               <p className="text-sm text-orange-700">
-                Showing live order updates. New orders will appear at the top.
+                Showing live order updates. New orders will appear at the top and require confirmation.
               </p>
             </div>
           </div>
@@ -225,9 +425,10 @@ export default function OrderUpdatesPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {orders.map((order, idx) => {
-            const status = order.status || "Received";
+            const status = order.status || ORDER_STATUS.PENDING_CONFIRMATION;
             const statusClass = getStatusColor(status);
             const totalItems = getTotalItems(order.items);
+            const isPending = status === ORDER_STATUS.PENDING_CONFIRMATION;
             
             return (
               <div key={idx} className="bg-white rounded-lg shadow overflow-hidden transition-all hover:shadow-md">
@@ -237,7 +438,7 @@ export default function OrderUpdatesPage() {
                       Order #{order.orderId}
                     </h3>
                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusClass}`}>
-                      {status}
+                      {status.replace('_', ' ')}
                     </span>
                   </div>
                   <p className="mt-1 text-sm text-gray-500">
@@ -254,7 +455,7 @@ export default function OrderUpdatesPage() {
                             <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center text-orange-700 font-medium mr-3">
                               {item.quantity || 1}
                             </div>
-                            <span className="font-medium">{item.name || "Unnamed item"}</span>
+                            <span className="font-medium">{getItemNameFromLocalStorage(item.id) || item.name || "Unnamed item"}</span>
                           </div>
                           {item.id && <span className="text-xs text-gray-500">ID: {item.id}</span>}
                         </div>
@@ -266,26 +467,59 @@ export default function OrderUpdatesPage() {
                 </div>
                 
                 <div className="bg-gray-50 px-4 py-3 sm:px-6 border-t border-gray-200">
-                  <div className="flex justify-between items-center">
+                  {isPending ? (
+                    <div className="flex justify-between items-center">
+                      <div className="flex space-x-2">
+                        <button 
+                          className="inline-flex items-center px-3 py-1 border border-transparent text-sm leading-4 font-medium rounded-md text-green-700 bg-green-100 hover:bg-green-200 transition-colors"
+                          onClick={() => confirmOrder(order.orderId)}
+                        >
+                          Confirm Order
+                        </button>
+                        <button 
+                          className="inline-flex items-center px-3 py-1 border border-transparent text-sm leading-4 font-medium rounded-md text-red-700 bg-red-100 hover:bg-red-200 transition-colors"
+                          onClick={() => cancelOrder(order.orderId)}
+                        >
+                          Cancel Order
+                        </button>
+                      </div>
+                    </div>
+                  ) : status === ORDER_STATUS.CONFIRMED ? (
                     <div className="flex space-x-2">
                       <button 
                         className="inline-flex items-center px-3 py-1 border border-transparent text-sm leading-4 font-medium rounded-md text-green-700 bg-green-100 hover:bg-green-200 transition-colors"
-                        onClick={() => {
-                          alert(`Update status for order #${order.orderId}`);
-                        }}
+                        onClick={() => updateOrderStatus(order.orderId, ORDER_STATUS.READY)}
                       >
-                        Update Status
+                        Mark Ready for Delivery
                       </button>
                       <button 
                         className="inline-flex items-center px-3 py-1 border border-transparent text-sm leading-4 font-medium rounded-md text-red-700 bg-red-100 hover:bg-red-200 transition-colors"
-                        onClick={() => {
-                          alert(`Cancel order #${order.orderId}`);
-                        }}
+                        onClick={() => cancelOrder(order.orderId)}
                       >
                         Cancel Order
                       </button>
                     </div>
-                  </div>
+                  ) : status === ORDER_STATUS.READY ? (
+                    <div className="flex items-center">
+                      <span className="text-sm text-green-700 font-medium">
+                        Order is ready for delivery
+                      </span>
+                    </div>
+                  ) : status === ORDER_STATUS.DELIVERED ? (
+                    <div className="flex items-center">
+                      <span className="text-sm text-purple-700 font-medium">
+                        Order has been delivered
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-500">
+                        {status === ORDER_STATUS.CANCELLED 
+                          ? "This order has been cancelled" 
+                          : `Order ${status.toLowerCase().replace('_', ' ')}`}
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
             );
