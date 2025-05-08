@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import "../globals.css";
+import { useAuth } from 'react-oidc-context';
 
 // Define types for restaurant data
 interface Restaurant {
@@ -87,7 +88,23 @@ const restaurantService = {
       console.error('Search error:', err);
       return [];
     }
-  }
+  },
+  async getTopPicks(userId: string): Promise<Restaurant[]> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/users/recommendations?userId=${userId}`);
+      if (!response.ok) throw new Error("Failed to fetch recommendations");
+      const { recommendedRestaurantIds } = await response.json();
+  
+      const results = await Promise.all(
+        recommendedRestaurantIds.map((id: string) => restaurantService.getRestaurantById(id))
+      );
+  
+      return results.filter(r => r !== null) as Restaurant[];
+    } catch (err) {
+      console.error("Top picks fetch failed:", err);
+      return [];
+    }
+  }  
 };
 
 const restaurantIds = [
@@ -178,6 +195,9 @@ export default function Restaurants() {
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [address, setAddress] = useState<string>('');
+  const [recommendedRestaurants, setRecommendedRestaurants] = useState<Restaurant[]>([]);
+  const auth = useAuth();
+  const userId = auth.user?.profile?.sub || ''; 
 
   // Added: Search state
   const [searchQuery, setSearchQuery] = useState('');
@@ -222,25 +242,28 @@ export default function Restaurants() {
   }
 
   useEffect(() => {
-    getLocation();
+    if (!auth.isAuthenticated || !auth.user) return;
+  
     const fetchRestaurants = async () => {
       setIsLoading(true);
       try {
-        const fetchPromises = restaurantIds.map(id => restaurantService.getRestaurantById(id));
-        const results = await Promise.all(fetchPromises);
+        // Top Picks (once user is ready)
+        const personalized = await restaurantService.getTopPicks(auth.user.profile.sub);
+        setRecommendedRestaurants(personalized);
+        // Popular restaurants
+        const results = await Promise.all(restaurantIds.map(id => restaurantService.getRestaurantById(id)));
         const fetchedRestaurants = results.filter(r => r !== null) as Restaurant[];
         setRestaurants(fetchedRestaurants.length > 0 ? fetchedRestaurants : restaurantsFallback);
       } catch (error) {
         console.error('Error fetching restaurants:', error);
-        setRestaurants(restaurantsFallback);
       } finally {
         setIsLoading(false);
       }
     };
+  
     fetchRestaurants();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
+  }, [auth.isAuthenticated, auth.user]);  
+  
   return (
     <main className="bg-orange-50 min-h-screen px-4 md:px-16 py-8">
       <h1 className="text-4xl font-extrabold text-gray-900 mb-8 text-center">Explore Restaurants</h1>
@@ -299,7 +322,16 @@ export default function Restaurants() {
             </div>
           )}
         </div>
-
+        {recommendedRestaurants.length > 0 && (
+          <div>
+            <h2 className="text-2xl font-bold text-gray-800 mb-6">Top Picks for You</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8 justify-items-center">
+              {recommendedRestaurants.map((r) => (
+                <RestaurantCard key={r.userId} restaurant={r} />
+              ))}
+            </div>
+          </div>
+        )}
         <div>
           <h2 className="text-2xl font-bold text-gray-800 mb-6">New Arrivals</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8 justify-items-center">
