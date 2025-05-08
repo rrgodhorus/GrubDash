@@ -60,11 +60,22 @@ function CheckoutForm() {
   const [selectedCard, setSelectedCard] = useState("");
   const [saveCard, setSaveCard] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
   const [orderId, setOrderId] = useState<string | null>(null);
 
   useEffect(() => {
+    const locRaw = localStorage.getItem("delivery_location");
+    if (locRaw) {
+      try {
+        const parsed = JSON.parse(locRaw);
+        setLocation(parsed);
+      } catch (err) {
+        console.warn("Invalid location format in storage.");
+      }
+    }
+
     const cartRaw = localStorage.getItem("cart");
     if (cartRaw) {
       const cart = JSON.parse(cartRaw);
@@ -116,7 +127,8 @@ function CheckoutForm() {
           customer_id: userId,
           restaurant_id: restaurantId,
           items,
-          save_card: saveCard
+          save_card: saveCard,
+          delivery_location: location
         })
       });
 
