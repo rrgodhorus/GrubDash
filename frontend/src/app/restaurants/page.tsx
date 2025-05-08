@@ -223,6 +223,8 @@ export default function Restaurants() {
 
   useEffect(() => {
     getLocation();
+    console.log(location)
+    localStorage.setItem("delivery_location", JSON.stringify(location));
     const fetchRestaurants = async () => {
       setIsLoading(true);
       try {
