@@ -16,30 +16,6 @@ const ORDER_STATUS = {
   CANCELLED: "CANCELLED"
 };
 
-// Function to get item name from localStorage
-const getItemNameFromLocalStorage = (itemId: string | undefined): string | null => {
-  if (!itemId) return null;
-  try {
-    // Get user details from localStorage with the key "user_details"
-    const userDetailsString = localStorage.getItem("user_details");
-    
-    if (userDetailsString) {
-      const userDetails = JSON.parse(userDetailsString);
-      // Check if this user data contains menu information
-      if (userDetails.menu && Array.isArray(userDetails.menu)) {
-        // Find the menu item by ID
-        const menuItem = userDetails.menu.find(item => item.item_id === itemId);
-        if (menuItem && menuItem.name) {
-          return menuItem.name;
-        }
-      }
-    }
-  } catch (error) {
-    console.error("Error retrieving item name from localStorage:", error);
-  }
-  return null;
-};
-
 export default function OrderUpdatesPage() {
   const [orders, setOrders] = useState<OrderMessage[]>([]);
   const [isConnected, setIsConnected] = useState(false);
@@ -455,7 +431,7 @@ export default function OrderUpdatesPage() {
                             <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center text-orange-700 font-medium mr-3">
                               {item.quantity || 1}
                             </div>
-                            <span className="font-medium">{getItemNameFromLocalStorage(item.id) || item.name || "Unnamed item"}</span>
+                            <span className="font-medium">{item.name || "Unnamed item"}</span>
                           </div>
                           {item.id && <span className="text-xs text-gray-500">ID: {item.id}</span>}
                         </div>
