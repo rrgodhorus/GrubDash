@@ -4,13 +4,38 @@ import { useState, useEffect } from 'react';
 import { Switch } from '@headlessui/react';
 import { useAuth } from "react-oidc-context";
 
+// Define the delivery type
+interface Delivery {
+  id: string;
+  restaurant: string;
+  destination: string;
+  estimatedTime: string;
+}
+
+// Define location data types
+interface OnlineLocationData {
+  deliveryPartnerId: string;
+  latitude: number;
+  longitude: number;
+  status: "online";
+}
+
+interface OfflineLocationData {
+  deliveryPartnerId: string;
+  status: "offline";
+}
+
+type LocationData = OnlineLocationData | OfflineLocationData;
+
 export default function DeliveriesPage() {
   const auth = useAuth();
   const userId = auth.user?.profile.sub;
+  const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
 
   const [isAvailable, setIsAvailable] = useState(false);
-  const [pendingDeliveries, setPendingDeliveries] = useState([]);
+  const [pendingDeliveries, setPendingDeliveries] = useState<Delivery[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [locationError, setLocationError] = useState("");
 
   // Load saved availability state on initial render
   useEffect(() => {
@@ -26,9 +51,73 @@ export default function DeliveriesPage() {
     }
   }, []);
 
+  // Get current location and send to API when going online
+  const sendLocationUpdate = (status: string) => {
+    if (!userId) {
+      console.error('No user ID available for location update');
+      return;
+    }
+    
+    // If going offline, send the simplified payload
+    if (status === 'offline') {
+      const locationData: OfflineLocationData = {
+        deliveryPartnerId: userId,
+        status: "offline"
+      };
+      
+      sendUpdateToAPI(locationData);
+      return;
+    }
+    
+    // Otherwise, get geolocation and send full payload
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const locationData: OnlineLocationData = {
+            deliveryPartnerId: userId,
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+            status: "online"
+          };
+          
+          sendUpdateToAPI(locationData);
+        },
+        (error) => {
+          console.error('Error getting location:', error);
+          setLocationError("Failed to get current location");
+        }
+      );
+    } else {
+      setLocationError("Geolocation is not supported by this browser");
+    }
+  };
+  
+  // Helper function to send data to API
+  const sendUpdateToAPI = (data: LocationData) => {
+    fetch(`${apiBaseUrl}/update-location`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data)
+    })
+      .then(response => {
+        if (!response.ok) {
+          throw new Error('Failed to update location');
+        }
+        return response.json();
+      })
+      .then(data => {
+        console.log('Location status updated successfully:', data);
+      })
+      .catch(error => {
+        console.error('Error updating location status:', error);
+        setLocationError("Failed to send location to server");
+      });
+  };
+
   // Mock function to fetch pending deliveries
   const fetchPendingDeliveries = () => {
-    // In a real app, you'd fetch this from your API
     setTimeout(() => {
       setPendingDeliveries([
         { id: '1', restaurant: 'Pizza Place', destination: '123 Main St', estimatedTime: '30 min' },
@@ -40,6 +129,7 @@ export default function DeliveriesPage() {
   // This function would be connected to your backend in a real implementation
   const toggleAvailability = async (newState: boolean) => {
     setIsLoading(true);
+    setLocationError(""); // Reset any previous location errors
     
     try {
       // Simulating API call with timeout
@@ -63,8 +153,12 @@ export default function DeliveriesPage() {
       
       // Toggle based on availability status
       if (newState) {
+        // Send location update when becoming available with status online
+        sendLocationUpdate('online');
         fetchPendingDeliveries();
       } else {
+        // Send update with status offline when toggling off
+        sendLocationUpdate('offline');
         setPendingDeliveries([]);
       }
     } catch (error) {
@@ -119,6 +213,11 @@ export default function DeliveriesPage() {
             Updating availability status...
           </div>
         )}
+        {locationError && (
+          <div className="mt-2 text-sm text-red-500">
+            {locationError}
+          </div>
+        )}
       </div>
       
       {/* Status Indicator */}
@@ -159,14 +258,14 @@ export default function DeliveriesPage() {
             <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-gray-400 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
             </svg>
-            <p className="text-gray-500 mb-1">You're currently offline</p>
+            <p className="text-gray-500 mb-1">You&apos;re currently offline</p>
             <p className="text-sm text-gray-400">Toggle the switch above to go online and receive delivery requests</p>
           </div>
         )}
         
         {pendingDeliveries.length > 0 && (
           <div className="space-y-4">
-            {pendingDeliveries.map((delivery: any) => (
+            {pendingDeliveries.map((delivery: Delivery) => (
               <div key={delivery.id} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition duration-150">
                 <div className="flex justify-between items-start">
                   <div>

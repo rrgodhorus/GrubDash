@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import { useAuth } from "react-oidc-context";
 import { useRouter, useSearchParams } from "next/navigation";
 import { GoogleMap, LoadScript, Marker, DirectionsService, DirectionsRenderer } from "@react-google-maps/api";
@@ -150,6 +150,205 @@ const MapComponent = ({ restaurantLocation, userLocation }: {
   );
 };
 
+// Map component for delivery partner view with optimized route
+const DeliveryRouteMap = ({ deliveryDetails }: { deliveryDetails: any }) => {
+  const [map, setMap] = useState<google.maps.Map | null>(null);
+  const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null);
+  const [directionsError, setDirectionsError] = useState<string | null>(null);
+  
+  // Delivery partner current location (can be updated with real data)
+  const deliveryPartnerLocation = {
+    lat: 40.68303738371292,
+    lng: -73.96486127243192
+  };
+
+  // Safe conversion to number
+  const toNumber = (value: any): number | null => {
+    if (value === null || value === undefined) return null;
+    const num = Number(value);
+    return !isNaN(num) ? num : null;
+  };
+
+  // Convert location format for Google Maps safely
+  const convertToGoogleLatLng = (location: any) => {
+    if (!location) return null;
+    
+    let latitude = toNumber(location.latitude) || toNumber(location.lat);
+    let longitude = toNumber(location.longitude) || toNumber(location.lng);
+    
+    if (latitude !== null && longitude !== null) {
+      return {
+        lat: latitude,
+        lng: longitude
+      };
+    }
+    
+    return null;
+  };
+
+  const onLoad = useCallback((map: google.maps.Map) => {
+    setMap(map);
+  }, []);
+
+  const onUnmount = useCallback(() => {
+    setMap(null);
+  }, []);
+
+  // Process locations for waypoints
+  useEffect(() => {
+    if (!deliveryDetails || !deliveryDetails.orders || deliveryDetails.orders.length === 0) {
+      return;
+    }
+
+    try {
+      // Create array of all locations (restaurants and delivery locations)
+      const waypoints: google.maps.DirectionsWaypoint[] = [];
+      const restaurants: google.maps.LatLngLiteral[] = [];
+      const deliveryLocations: google.maps.LatLngLiteral[] = [];
+      
+      // Process each order and extract locations
+      deliveryDetails.orders.forEach((order: any) => {
+        // Restaurant location
+        const restaurantLoc = convertToGoogleLatLng(order.restaurant_location);
+        if (restaurantLoc) {
+          restaurants.push(restaurantLoc);
+          waypoints.push({
+            location: restaurantLoc,
+            stopover: true
+          });
+        }
+        
+        // Delivery location
+        const deliveryLoc = convertToGoogleLatLng(order.delivery_location);
+        if (deliveryLoc) {
+          deliveryLocations.push(deliveryLoc);
+          waypoints.push({
+            location: deliveryLoc,
+            stopover: true
+          });
+        }
+      });
+      
+      // If we have waypoints, calculate optimized route
+      if (waypoints.length > 0) {
+        const directionsService = new google.maps.DirectionsService();
+        
+        // Start from delivery partner's current location
+        const origin = new google.maps.LatLng(
+          deliveryPartnerLocation.lat,
+          deliveryPartnerLocation.lng
+        );
+        
+        // End at the last delivery location 
+        const allWaypoints = [...waypoints];
+        const destination = allWaypoints.pop()?.location || origin;
+        
+        directionsService.route(
+          {
+            origin: origin,
+            destination: destination,
+            waypoints: waypoints,
+            optimizeWaypoints: true, // Optimize the route order
+            travelMode: google.maps.TravelMode.DRIVING,
+          },
+          (result, status) => {
+            if (status === google.maps.DirectionsStatus.OK) {
+              setDirections(result);
+              setDirectionsError(null);
+            } else {
+              setDirectionsError(`Couldn't calculate optimized route: ${status}`);
+              console.error(`Directions request failed: ${status}`);
+            }
+          }
+        );
+      }
+    } catch (error) {
+      console.error("Error calculating directions:", error);
+      setDirectionsError("Error calculating directions");
+    }
+  }, [deliveryDetails]);
+
+  // Render the map
+  return (
+    <div className="w-full h-[500px] relative rounded-lg overflow-hidden shadow-md my-6">
+      <GoogleMap
+        mapContainerStyle={{
+          width: '100%',
+          height: '100%'
+        }}
+        center={deliveryPartnerLocation}
+        zoom={12}
+        onLoad={onLoad}
+        onUnmount={onUnmount}
+      >
+        {/* Delivery Partner Current Location - only showing this custom marker, letting DirectionsRenderer handle the rest */}
+        <Marker
+          position={deliveryPartnerLocation}
+          icon={{
+            url: "http://maps.google.com/mapfiles/ms/icons/blue-dot.png",
+            scaledSize: new google.maps.Size(40, 40)
+          }}
+          title="Delivery Partner's Current Location"
+        />
+        
+        {/* Display optimized route */}
+        {directions && (
+          <DirectionsRenderer 
+            directions={directions}
+            options={{
+              suppressMarkers: false, // Allow Google to show their default A, B, C markers
+              polylineOptions: {
+                strokeColor: '#4285F4',
+                strokeWeight: 5
+              }
+            }}
+          />
+        )}
+      </GoogleMap>
+      
+      {directionsError && (
+        <div className="absolute bottom-0 left-0 right-0 bg-red-500 text-white p-2 text-sm">
+          {directionsError}
+        </div>
+      )}
+      
+      {/* Updated legend to match Google Maps DirectionsRenderer markers */}
+      <div className="absolute top-2 left-2 bg-white p-2 rounded shadow-md text-sm">
+        <div className="flex items-center mb-1">
+          <div className="h-5 w-5 bg-blue-500 rounded-full flex items-center justify-center text-white text-xs font-bold mr-2">
+            <span>•</span>
+          </div>
+          <span>Delivery Partner&apos;s Current Location</span>
+        </div>
+        <div className="flex items-center mb-1 text-xs">
+          <div className="flex items-center justify-center h-5 w-5 rounded-full bg-white border border-gray-300 text-red-600 font-bold mr-2">
+            A
+          </div>
+          <span>Starting Point</span>
+        </div>
+        <div className="flex items-center mb-1 text-xs">
+          <div className="flex items-center justify-center h-5 w-5 rounded-full bg-white border border-gray-300 text-red-600 font-bold mr-2">
+            B
+          </div>
+          <span>Pickup Location</span>
+        </div>
+        <div className="flex items-center mb-1 text-xs">
+          <div className="flex items-center justify-center h-5 w-5 rounded-full bg-white border border-gray-300 text-red-600 font-bold mr-2">
+            C+
+          </div>
+          <span>Delivery Locations</span>
+        </div>
+        <div className="flex items-center text-xs">
+          <div className="flex items-center justify-center h-5 w-5 rounded-full bg-white border border-gray-300 text-red-600 font-bold mr-2">
+            F
+          </div>
+          <span>Final Destination</span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export default function OrderTrackingPage() {
   const router = useRouter();
   const auth = useAuth();
@@ -160,7 +359,27 @@ export default function OrderTrackingPage() {
   const [restaurant, setRestaurant] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [refreshInterval, setRefreshInterval] = useState<NodeJS.Timeout | null>(null);
+  const refreshInterval = useRef<NodeJS.Timeout | null>(null);
+  const [deliveryDetails, setDeliveryDetails] = useState<any>(null);
+
+  // Function to fetch delivery details for an order
+  const fetchDeliveryDetails = async (deliveryId: string) => {
+    try {
+      const response = await fetch(`https://hasbgxp22pykmsxgmrripwf73m0nvhdh.lambda-url.us-east-1.on.aws/partners/${deliveryId}`);
+      
+      if (!response.ok) {
+        console.error(`Error fetching delivery details: ${response.status}`);
+        return;
+      }
+      
+      const data = await response.json();
+      console.log("Delivery details:", data);
+      setDeliveryDetails({ ...data, lastFetchTime: Date.now() });
+    } catch (err: any) {
+      console.error("Error fetching delivery details:", err);
+      // Don't set error state here, we'll just have partial data
+    }
+  };
 
   // Function to fetch restaurant details
   const fetchRestaurantDetails = async (restaurantId: string) => {
@@ -202,6 +421,19 @@ export default function OrderTrackingPage() {
         // Fetch restaurant details if we have a restaurant_id
         if (data.restaurant_id) {
           await fetchRestaurantDetails(data.restaurant_id);
+        }
+
+        // If order has a delivery_id and status is ready for delivery, fetch delivery details
+        // Only fetch if we don't already have delivery details or it's been more than 60 seconds since last fetch
+        const shouldFetchDeliveryDetails = data.delivery_id && 
+          (data.status === 'ready_for_delivery' || getDisplayStatus(data.status) === ORDER_STATUS.READY) &&
+          (!deliveryDetails || !deliveryDetails.lastFetchTime || (Date.now() - deliveryDetails.lastFetchTime) > 60000);
+        
+        if (shouldFetchDeliveryDetails) {
+          await fetchDeliveryDetails(data.delivery_id);
+        } else if (!data.delivery_id || !(data.status === 'ready_for_delivery' || getDisplayStatus(data.status) === ORDER_STATUS.READY)) {
+          // Reset delivery details if not applicable
+          setDeliveryDetails(null);
         }
       }
     } catch (err: any) {
@@ -276,27 +508,32 @@ export default function OrderTrackingPage() {
     
     const userId = auth.user?.profile["cognito:username"];
 
+    // Clear any existing interval first to prevent duplicates
+    if (refreshInterval.current) {
+      clearInterval(refreshInterval.current);
+    }
+
     // Only poll if the order is in an active state
     if (order && !isOrderCompleted(order.status)) {
-      // Set up interval to refresh order data every 15 seconds
+      // Set up interval to refresh order data every 30 seconds
       const interval = setInterval(() => {
         fetchOrderDetails(orderId, userId);
-      }, 15000); // 15 seconds
+      }, 30000); // 30 seconds
       
-      setRefreshInterval(interval);
-    } else if (refreshInterval && isOrderCompleted(order?.status)) {
+      refreshInterval.current = interval;
+    } else if (refreshInterval.current && isOrderCompleted(order?.status)) {
       // Clear polling when order is in a completed state
-      clearInterval(refreshInterval);
-      setRefreshInterval(null);
+      clearInterval(refreshInterval.current);
+      refreshInterval.current = null;
     }
     
     // Clean up on unmount
     return () => {
-      if (refreshInterval) {
-        clearInterval(refreshInterval);
+      if (refreshInterval.current) {
+        clearInterval(refreshInterval.current);
       }
     };
-  }, [orderId, auth.isAuthenticated, order?.status]);
+  }, [orderId, auth.isAuthenticated, order?.status]); // Reduced dependencies
 
   // Helper function to check if order is in a final state
   const isOrderCompleted = (status: string) => {
@@ -426,6 +663,13 @@ export default function OrderTrackingPage() {
         
         {/* Progress bar */}
         <div className="p-6">
+          Debug info
+          <div className="bg-gray-100 p-2 mb-4 rounded">
+            <p className="text-xs font-mono">Debug - Status: {order.status}</p>
+            <p className="text-xs font-mono">Debug - Display Status: {getDisplayStatus(order.status)}</p>
+            <p className="text-xs font-mono">Debug - Has Delivery Details: {deliveryDetails ? 'Yes' : 'No'}</p>
+          </div>
+          
           <div className="mb-6">
             <div className="flex justify-between items-center mb-2">
               <span className="text-sm text-gray-500">Order Progress</span>
@@ -510,7 +754,12 @@ export default function OrderTrackingPage() {
         {/* Map component */}
         <div className="p-6 border-t border-gray-200">
           <h2 className="text-xl font-bold mb-4">Order Location Tracking</h2>
-          {getDisplayStatus(order.status) === ORDER_STATUS.IN_DELIVERY || getDisplayStatus(order.status) === ORDER_STATUS.READY ? (
+          
+          {(getDisplayStatus(order.status) === ORDER_STATUS.IN_DELIVERY || getDisplayStatus(order.status) === ORDER_STATUS.READY) && deliveryDetails ? (
+            <LoadScript googleMapsApiKey={GOOGLE_MAPS_API_KEY}>
+              <DeliveryRouteMap deliveryDetails={deliveryDetails} />
+            </LoadScript>
+          ) : getDisplayStatus(order.status) === ORDER_STATUS.IN_DELIVERY || getDisplayStatus(order.status) === ORDER_STATUS.READY ? (
             <LoadScript googleMapsApiKey={GOOGLE_MAPS_API_KEY}>
               {/* Use restaurant location data from the restaurant object if available */}
               {((restaurant && restaurant.location) || order.restaurant_location) && order.delivery_location ? (
@@ -538,30 +787,7 @@ export default function OrderTrackingPage() {
             </div>
           )}
         </div>
-        
-        {/* Footer with action buttons */}
-        <div className="bg-gray-50 p-6 border-t border-gray-200">
-          <div className="flex flex-col md:flex-row justify-between gap-4">
-            <button 
-              onClick={() => router.push('/restaurants')}
-              className="px-4 py-2 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition text-gray-700"
-            >
-              Order Again
-            </button>
-            {order.status !== 'delivered' && order.status !== 'order_cancelled' && (
-              <button 
-                onClick={() => {
-                  // This would be handled with proper API call in a real app
-                  alert('This feature is not implemented yet');
-                }}
-                className="px-4 py-2 bg-red-50 border border-red-300 rounded-md hover:bg-red-100 transition text-red-700"
-              >
-                Cancel Order
-              </button>
-            )}
-          </div>
-        </div>
       </div>
-    </main>
-  );
+    </main> 
+  )
 }

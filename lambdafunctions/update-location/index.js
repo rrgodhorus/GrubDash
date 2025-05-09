@@ -19,24 +19,52 @@ export const handler = async (event) => {
       isConnected = true;
     }
 
-    const { deliveryPartnerId, latitude, longitude, timestamp } = event;
+    const { deliveryPartnerId, latitude, longitude, status } = event;
 
-    if (!deliveryPartnerId || !latitude || !longitude || !timestamp) {
+    if (!deliveryPartnerId || !status) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ error: "Missing deliveryPartnerId or status" }),
+      };
+    }
+
+    const key = deliveryPartnerId;
+
+    if (status === "offline") {
+      await client.del(key);
+      return {
+        statusCode: 200,
+        body: JSON.stringify({ message: "Delivery partner is offline" }),
+      };
+  
+    }
+
+    if (!latitude || !longitude) {
       return {
         statusCode: 400,
         body: JSON.stringify({ error: "Missing fields" }),
       };
     }
 
-    const key = `${deliveryPartnerId}`;
-    const value = JSON.stringify({ latitude, longitude, timestamp });
-
-    const result = await client.set(key, value);
-
-    return {
-      statusCode: 200,
-      body: JSON.stringify({ message: "Location updated", result }),
-    };
+    if (status === "online") {
+      // Only set if key does not exist (first time coming online)
+      const exists = await client.exists(key);
+      if (!exists) {
+        const timestamp = new Date().toISOString();
+        await client.hSet(key, {
+          latitude,
+          longitude,
+          timestamp,
+        });
+      } else {
+        await client.hSet(key, {
+          latitude,
+          longitude,
+        });
+      }
+      await client.expire(key, 60);
+      return { statusCode: 200, body: JSON.stringify({ message: "Delivery partner is online and location updated" }) };
+    }
 
   } catch (err) {
     console.error("Error occurred:", err);
