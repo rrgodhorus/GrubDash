@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import "../globals.css";
+import { useAuth } from 'react-oidc-context';
 
 // Define types for restaurant data
 interface Restaurant {
@@ -137,7 +138,23 @@ const restaurantService = {
       console.error('Search error:', err);
       return [];
     }
-  }
+  },
+  async getTopPicks(userId: string): Promise<Restaurant[]> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/users/recommendations?userId=${userId}`);
+      if (!response.ok) throw new Error("Failed to fetch recommendations");
+      const { recommendedRestaurantIds } = await response.json();
+  
+      const results = await Promise.all(
+        recommendedRestaurantIds.map((id: string) => restaurantService.getRestaurantById(id))
+      );
+  
+      return results.filter(r => r !== null) as Restaurant[];
+    } catch (err) {
+      console.error("Top picks fetch failed:", err);
+      return [];
+    }
+  }  
 };
 
 const restaurantIds = [
@@ -205,7 +222,7 @@ const newArrivalsFallback = [
 ];
 
 
-function RestaurantCard({ restaurant }: { restaurant: Restaurant }) {
+function RestaurantCard({ restaurant, userId }: { restaurant: Restaurant; userId: string; }) {
   return (
     <div className="bg-white rounded-xl shadow-lg w-72 min-w-72 hover:scale-105 transition-transform cursor-pointer border border-orange-100">
       <div className="relative h-40 w-full rounded-t-xl overflow-hidden">
@@ -218,8 +235,26 @@ function RestaurantCard({ restaurant }: { restaurant: Restaurant }) {
           <span className="mr-2">⭐ {restaurant.rating}</span>
           <span>• {restaurant.time || '30-40 min'}</span>
         </div>
-        <Link href={`/restaurants/menu?id=${restaurant.userId}`} passHref>
-          <button className="mt-2 w-full bg-orange-600 text-white py-1.5 rounded-lg font-semibold hover:bg-orange-700 transition">View Menu</button>
+        <Link
+            href={`/restaurants/menu?id=${restaurant.userId}`}
+            onClick={async () => {
+              if (userId) {
+                await fetch(`${API_BASE_URL}/interactions`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    userId,
+                    itemId: restaurant.userId,
+                    eventType: "CLICK"
+                  })
+                });
+              }
+            }}
+            passHref
+          >
+          <button className="mt-2 w-full bg-orange-600 text-white py-1.5 rounded-lg font-semibold hover:bg-orange-700 transition">
+            View Menu
+          </button>
         </Link>
       </div>
     </div>
@@ -232,7 +267,10 @@ export default function Restaurants() {
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [address, setAddress] = useState<string>('');
-  
+    const [recommendedRestaurants, setRecommendedRestaurants] = useState<Restaurant[]>([]);
+  const auth = useAuth();
+  const userId = auth.user?.profile?.sub || ''; 
+
   const [isAddressModalOpen, setIsAddressModalOpen] = useState(false);
   const [locationStatus, setLocationStatus] = useState<'none' | 'detected' | 'manual'>('none');
 
@@ -350,7 +388,7 @@ export default function Restaurants() {
         refreshRestaurants();
       });
   };
-
+  
   const refreshRestaurants = async () => {
     setIsLoading(true);
     try {
@@ -375,6 +413,20 @@ export default function Restaurants() {
       setIsLoading(false);
     }
   };
+  
+  useEffect(() => {
+    const fetchTopPicks = async () => {
+      if (!auth.isAuthenticated || !auth.user) return;
+      try {
+        const personalized = await restaurantService.getTopPicks(auth.user.profile.sub);
+        setRecommendedRestaurants(personalized);
+      } catch (error) {
+        console.error('Failed to fetch top picks:', error);
+      }
+    };
+  
+    fetchTopPicks();
+  }, [auth.isAuthenticated, auth.user]);  
 
   return (
     <main className="bg-orange-50 min-h-screen px-4 md:px-16 py-8">
@@ -451,13 +503,26 @@ export default function Restaurants() {
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8 justify-items-center">
-              {restaurants.map((r) => (
+              {/* {restaurants.map((r) => (
                 <RestaurantCard key={r.userId} restaurant={r} />
+              ))} */}
+              {restaurants.map((r) => (
+                <RestaurantCard key={r.userId} restaurant={r} userId={userId} />
               ))}
             </div>
           )}
         </div>
-
+        {recommendedRestaurants.length > 0 && (
+          <div>
+            <h2 className="text-2xl font-bold text-gray-800 mb-6">Top Picks for You</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8 justify-items-center">
+              {recommendedRestaurants.slice(0,3).map((r) => (
+                // <RestaurantCard key={r.userId} restaurant={r} />
+                <RestaurantCard key={r.userId} restaurant={r} userId={userId} />
+              ))}
+            </div>
+          </div>
+        )}
         <div>
           <h2 className="text-2xl font-bold text-gray-800 mb-6">New Arrivals</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8 justify-items-center">
