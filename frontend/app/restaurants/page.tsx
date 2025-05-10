@@ -497,7 +497,7 @@ export default function Restaurants() {
           <div>
             <h2 className="text-2xl font-bold text-gray-800 mb-6">Top Picks for You</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8 justify-items-center">
-              {recommendedRestaurants.map((r) => (
+              {recommendedRestaurants.slice(0,3).map((r) => (
                 // <RestaurantCard key={r.userId} restaurant={r} />
                 <RestaurantCard key={r.userId} restaurant={r} userId={userId} />
               ))}
