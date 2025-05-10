@@ -191,6 +191,19 @@ function MenuContent() {
     async function fetchRestaurant() {
       const data = await restaurantService.getRestaurantById(restaurantId);
       setRestaurantData(data || sampleMenus[restaurantId]);
+
+      // Log "CLICK" when menu is viewed
+      if (auth.user?.profile?.sub && restaurantId) {
+        await fetch(`${API_BASE_URL}/interactions`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            userId: auth.user.profile.sub,
+            itemId: restaurantId,
+            eventType: "CLICK"
+          })
+        });
+      }
     }
 
     if (restaurantId) {
@@ -278,7 +291,20 @@ function MenuContent() {
       }
 
       return newCart;
+    }
+  );
+  
+  if (auth.user?.profile?.sub) {
+    fetch(`${API_BASE_URL}/interactions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        userId: auth.user.profile.sub,
+        itemId: item.id,
+        eventType: "ADD_TO_CART"
+      })
     });
+  }
 
     // Update stored restaurant ID if this is the first item
     if (Object.keys(cart).length === 0 && !storedRestaurantId) {
