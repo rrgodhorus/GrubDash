@@ -397,12 +397,8 @@ export default function Restaurants() {
   };
   
   const refreshRestaurants = async () => {
-    if (!auth.isAuthenticated || !auth.user) return;
     setIsLoading(true);
     try {
-      // Top Picks (once user is ready)
-      const personalized = await restaurantService.getTopPicks(auth.user.profile.sub);
-      setRecommendedRestaurants(personalized);
       const fetchPromises = restaurantIds.map(id => restaurantService.getRestaurantById(id));
       const results = await Promise.all(fetchPromises);
       const fetchedRestaurants = results.filter(r => r !== null) as Restaurant[];
@@ -414,6 +410,20 @@ export default function Restaurants() {
       setIsLoading(false);
     }
   };
+  
+  useEffect(() => {
+    const fetchTopPicks = async () => {
+      if (!auth.isAuthenticated || !auth.user) return;
+      try {
+        const personalized = await restaurantService.getTopPicks(auth.user.profile.sub);
+        setRecommendedRestaurants(personalized);
+      } catch (error) {
+        console.error('Failed to fetch top picks:', error);
+      }
+    };
+  
+    fetchTopPicks();
+  }, [auth.isAuthenticated, auth.user]);  
 
   return (
     <main className="bg-orange-50 min-h-screen px-4 md:px-16 py-8">
