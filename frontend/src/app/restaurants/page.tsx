@@ -15,6 +15,7 @@ interface Restaurant {
   time?: string;
   email?: string;
   address?: string;
+  createdAt?: string;
 }
 
 // API response interfaces
@@ -106,7 +107,8 @@ const restaurantService = {
         rating: data.rating || 0.0,
         time: '30-45 min',
         email: data.email,
-        address: data.address
+        address: data.address,
+        createdAt: data.createdAt
       };
     } catch (error) {
       console.error(`Failed to fetch restaurant with ID ${restaurantId}:`, error);
@@ -141,7 +143,11 @@ const restaurantService = {
 const restaurantIds = [
   "uvQM9dckyv8RZB3hQYrKKw",
   "WZLhPYaYSFy7M_-Jh1VuNw",
-  "54e83468-3021-7050-01e5-12a82c111031"
+  "54e83468-3021-7050-01e5-12a82c111031",
+  "g7h8i9j0-k1l2-m3n4-o5p6-q7r8s9t0u1v2",
+  "e1a73f8e-2d47-4d2b-a4f2-921c9e0f9e61",
+  "i9j0k1l2-m3n4-o5p6-q7r8-s9t0u1v2w3x4",
+  "a3dc7f1c-babc-4d30-9b73-9b5b0ff5d678"
 ];
 
 const restaurantsFallback = [
@@ -231,6 +237,9 @@ export default function Restaurants() {
   const [locationStatus, setLocationStatus] = useState<'none' | 'detected' | 'manual'>('none');
 
   const [searchQuery, setSearchQuery] = useState('');
+
+  const [newArrivals, setNewArrivals] = useState<Restaurant[]>([]);
+
 
   // Update location in both state and localStorage
   const updateLocationData = (newLocation: { lat: number; lng: number } | null, newAddress: string) => {
@@ -348,7 +357,17 @@ export default function Restaurants() {
       const fetchPromises = restaurantIds.map(id => restaurantService.getRestaurantById(id));
       const results = await Promise.all(fetchPromises);
       const fetchedRestaurants = results.filter(r => r !== null) as Restaurant[];
-      setRestaurants(fetchedRestaurants.length > 0 ? fetchedRestaurants : restaurantsFallback);
+      const sortedByRating = [...fetchedRestaurants]
+        .filter(r => r.rating !== undefined && r.rating !== null)
+        .sort((a, b) => b.rating! - a.rating!);
+
+        setRestaurants(sortedByRating.slice(0, 3));
+
+        const sortedByDate = [...fetchedRestaurants]
+          .filter(r => r.createdAt)
+          .sort((a, b) => new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime())
+          .slice(0, 3);
+        setNewArrivals(sortedByDate.slice(0, 3));
     } catch (error) {
       console.error('Error fetching restaurants:', error);
       setRestaurants(restaurantsFallback);
@@ -442,9 +461,14 @@ export default function Restaurants() {
         <div>
           <h2 className="text-2xl font-bold text-gray-800 mb-6">New Arrivals</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8 justify-items-center">
-            {newArrivalsFallback.map((r) => (
+            {newArrivals.length > 0 ? (
+              newArrivals.map((r) => (
               <RestaurantCard key={r.userId} restaurant={r} />
-            ))}
+              ))) : (
+                newArrivalsFallback.map((r) => (
+                <RestaurantCard key={r.userId} restaurant={r} />
+                ))
+              )}
           </div>
         </div>
       </section>
