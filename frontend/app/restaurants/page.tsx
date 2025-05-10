@@ -16,6 +16,7 @@ interface Restaurant {
   time?: string;
   email?: string;
   address?: string;
+  createdAt?: string;
 }
 
 // API response interfaces
@@ -44,13 +45,13 @@ interface ApiRestaurant {
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
 // Modal component for address input
-function AddressModal({ 
-  isOpen, 
-  onClose, 
-  onSubmit 
-}: { 
-  isOpen: boolean; 
-  onClose: () => void; 
+function AddressModal({
+  isOpen,
+  onClose,
+  onSubmit
+}: {
+  isOpen: boolean;
+  onClose: () => void;
   onSubmit: (address: string) => void;
 }) {
   const [addressInput, setAddressInput] = useState('');
@@ -107,7 +108,8 @@ const restaurantService = {
         rating: data.rating || 0.0,
         time: '30-45 min',
         email: data.email,
-        address: data.address
+        address: data.address,
+        createdAt: data.createdAt
       };
     } catch (error) {
       console.error(`Failed to fetch restaurant with ID ${restaurantId}:`, error);
@@ -142,23 +144,27 @@ const restaurantService = {
       const response = await fetch(`${API_BASE_URL}/users/recommendations?userId=${userId}`);
       if (!response.ok) throw new Error("Failed to fetch recommendations");
       const { recommendedRestaurantIds } = await response.json();
-  
+
       const results = await Promise.all(
         recommendedRestaurantIds.map((id: string) => restaurantService.getRestaurantById(id))
       );
-  
+
       return results.filter(r => r !== null) as Restaurant[];
     } catch (err) {
       console.error("Top picks fetch failed:", err);
       return [];
     }
-  }  
+  }
 };
 
 const restaurantIds = [
   "uvQM9dckyv8RZB3hQYrKKw",
   "WZLhPYaYSFy7M_-Jh1VuNw",
-  "54e83468-3021-7050-01e5-12a82c111031"
+  "54e83468-3021-7050-01e5-12a82c111031",
+  "g7h8i9j0-k1l2-m3n4-o5p6-q7r8s9t0u1v2",
+  "e1a73f8e-2d47-4d2b-a4f2-921c9e0f9e61",
+  "i9j0k1l2-m3n4-o5p6-q7r8-s9t0u1v2w3x4",
+  "a3dc7f1c-babc-4d30-9b73-9b5b0ff5d678"
 ];
 
 const restaurantsFallback = [
@@ -261,20 +267,25 @@ export default function Restaurants() {
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [address, setAddress] = useState<string>('');
-    const [recommendedRestaurants, setRecommendedRestaurants] = useState<Restaurant[]>([]);
+  const [recommendedRestaurants, setRecommendedRestaurants] = useState<Restaurant[]>([]);
   const auth = useAuth();
-  const userId = auth.user?.profile?.sub || ''; 
+  const userId = auth.user?.profile?.sub || '';
 
   const [isAddressModalOpen, setIsAddressModalOpen] = useState(false);
   const [locationStatus, setLocationStatus] = useState<'none' | 'detected' | 'manual'>('none');
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [newArrivals, setNewArrivals] = useState<Restaurant[]>([]);
+
+  // New state to track if search results are being displayed
+  const [isDisplayingSearchResults, setIsDisplayingSearchResults] = useState(false);
+
 
   // Update location in both state and localStorage
   const updateLocationData = (newLocation: { lat: number; lng: number } | null, newAddress: string) => {
     setLocation(newLocation);
     setAddress(newAddress);
-    
+
     // Save to localStorage for use in checkout
     if (newLocation) {
       localStorage.setItem('deliveryLocation', JSON.stringify(newLocation));
@@ -289,7 +300,7 @@ export default function Restaurants() {
   useEffect(() => {
     const savedLocation = localStorage.getItem('deliveryLocation');
     const savedAddress = localStorage.getItem('deliveryAddress');
-    
+
     if (savedLocation && savedAddress) {
       try {
         const parsedLocation = JSON.parse(savedLocation);
@@ -300,8 +311,8 @@ export default function Restaurants() {
         console.error('Error parsing saved location:', error);
       }
     }
-    
-    refreshRestaurants();
+
+    refreshRestaurants(); // This will set isDisplayingSearchResults to false
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -314,11 +325,18 @@ export default function Restaurants() {
     navigator.geolocation.getCurrentPosition(
       (position) => {
         const newLocation = { lat: position.coords.latitude, lng: position.coords.longitude };
-        
+
         // Call reverseGeocode when location is updated
         reverseGeocode(newLocation.lat, newLocation.lng)
           .then(formattedAddress => {
             updateLocationData(newLocation, formattedAddress);
+            // If search results are displayed, re-run search with new location
+            // Otherwise, refresh popular list (which also considers new location indirectly via `location` state)
+            if (isDisplayingSearchResults && searchQuery.trim() !== '') {
+                 handleSearchSubmit(undefined, newLocation); // Pass event as undefined, newLocation
+            } else {
+                refreshRestaurants();
+            }
           })
           .catch(err => {
             console.error("Geocoding error:", err);
@@ -333,17 +351,17 @@ export default function Restaurants() {
   };
 
   const geocodeAddress = async (address: string): Promise<void> => {
-    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+    const apiKey = process.env.NEXT_PUBLIC_Maps_API_KEY;
     try {
       const response = await fetch(
         `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${apiKey}`
       );
       const data = await response.json();
-      
+
       if (data.status === "OK" && data.results && data.results.length > 0) {
         const { lat, lng } = data.results[0].geometry.location;
         const formattedAddress = data.results[0].formatted_address;
-        
+
         updateLocationData({ lat, lng }, formattedAddress);
         setLocationStatus('manual');
         setLocError(null);
@@ -358,7 +376,7 @@ export default function Restaurants() {
   };
 
   const reverseGeocode = (lat: number, lng: number): Promise<string> => {
-    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+    const apiKey = process.env.NEXT_PUBLIC_Maps_API_KEY;
     return fetch(
       `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${apiKey}`
     )
@@ -372,42 +390,87 @@ export default function Restaurants() {
       });
   }
 
-  const handleAddressSubmit = (address: string) => {
+  const handleAddressModalSubmitInternal = (submittedAddress: string) => { // Renamed to avoid conflict
     setIsLoading(true);
-    geocodeAddress(address)
+    geocodeAddress(submittedAddress)
       .finally(() => {
-        refreshRestaurants();
+        // If search results were displayed, re-run search for new address
+        // Otherwise, refresh popular list
+        if (isDisplayingSearchResults && searchQuery.trim() !== '') {
+            handleSearchSubmit(undefined, location); // Use current location state which should be updated by geocodeAddress
+        } else {
+            refreshRestaurants();
+        }
       });
   };
-  
+
   const refreshRestaurants = async () => {
     setIsLoading(true);
+    setIsDisplayingSearchResults(false); // Reset to default view
     try {
       const fetchPromises = restaurantIds.map(id => restaurantService.getRestaurantById(id));
       const results = await Promise.all(fetchPromises);
       const fetchedRestaurants = results.filter(r => r !== null) as Restaurant[];
-      setRestaurants(fetchedRestaurants.length > 0 ? fetchedRestaurants : restaurantsFallback);
+      const sortedByRating = [...fetchedRestaurants]
+        .filter(r => r.rating !== undefined && r.rating !== null)
+        .sort((a, b) => b.rating! - a.rating!);
+
+        setRestaurants(sortedByRating.slice(0, 3)); // This is for "Popular Restaurants"
+
+        const sortedByDate = [...fetchedRestaurants]
+          .filter(r => r.createdAt)
+          .sort((a, b) => new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime())
+          .slice(0, 3);
+        setNewArrivals(sortedByDate.length > 0 ? sortedByDate : newArrivalsFallback); // Ensure fallback if API returns empty
     } catch (error) {
       console.error('Error fetching restaurants:', error);
       setRestaurants(restaurantsFallback);
+      setNewArrivals(newArrivalsFallback); // Set fallback for new arrivals on error too
     } finally {
       setIsLoading(false);
     }
   };
-  
+
   useEffect(() => {
     const fetchTopPicks = async () => {
-      if (!auth.isAuthenticated || !auth.user) return;
+      if (!auth.isAuthenticated || !auth.user) {
+        setRecommendedRestaurants([]); // Clear if not authenticated
+        return;
+      }
       try {
         const personalized = await restaurantService.getTopPicks(auth.user.profile.sub);
         setRecommendedRestaurants(personalized);
       } catch (error) {
         console.error('Failed to fetch top picks:', error);
+        setRecommendedRestaurants([]); // Clear on error
       }
     };
-  
+
     fetchTopPicks();
-  }, [auth.isAuthenticated, auth.user]);  
+  }, [auth.isAuthenticated, auth.user]);
+
+  // Renamed the form submit handler to avoid conflicts if any, and to be more specific
+  const handleSearchSubmit = async (event?: React.FormEvent<HTMLFormElement>, searchLocation = location) => {
+    if (event) event.preventDefault(); // Prevent default form submission if event is passed
+
+    if (!searchQuery.trim()) { // If search query is empty, show popular restaurants
+        refreshRestaurants();
+        return;
+    }
+
+    setIsLoading(true);
+    setIsDisplayingSearchResults(true); // Indicate that search results are being shown
+    try {
+      const results = await restaurantService.searchRestaurants(searchQuery, searchLocation);
+      setRestaurants(results.length > 0 ? results : []); // If no results, show empty or a message
+    } catch (error) {
+      console.error("Search failed, using fallback:", error);
+      setRestaurants(restaurantsFallback); // Or set to [] to show "no results" message
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
 
   return (
     <main className="bg-orange-50 min-h-screen px-4 md:px-16 py-8">
@@ -435,7 +498,7 @@ export default function Restaurants() {
             Enter Address Manually
           </button>
         </div>
-        {locationStatus !== 'none' && (
+        {locationStatus !== 'none' && address && ( // Show address only if available
           <div className="text-green-700 px-4 py-2 bg-green-50 rounded-lg border border-green-200">
             <span className="font-semibold">Delivery Location:</span> {address}
           </div>
@@ -446,29 +509,21 @@ export default function Restaurants() {
       <AddressModal
         isOpen={isAddressModalOpen}
         onClose={() => setIsAddressModalOpen(false)}
-        onSubmit={handleAddressSubmit}
+        onSubmit={handleAddressModalSubmitInternal} // Use the renamed handler
       />
 
       <div className="mb-10 max-w-xl mx-auto">
-        <form
-          onSubmit={async (e) => {
-            e.preventDefault();
-            setIsLoading(true);
-            try {
-              const results = await restaurantService.searchRestaurants(searchQuery, location);
-              setRestaurants(results);
-            } catch (error) {
-              console.error("Search failed, using fallback:", error);
-              setRestaurants(restaurantsFallback);
-            } finally {
-              setIsLoading(false);
-            }
-          }}
-        >
+        <form onSubmit={handleSearchSubmit} >
           <input
             type="text"
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => {
+                setSearchQuery(e.target.value);
+                // If search query is cleared, revert to popular restaurants view
+                if (e.target.value.trim() === '') {
+                    refreshRestaurants();
+                }
+            }}
             placeholder="Search for restaurants..."
             className="w-full px-5 py-3 border-2 border-orange-200 rounded-xl shadow focus:outline-none focus:border-orange-500 text-lg"
           />
@@ -477,41 +532,56 @@ export default function Restaurants() {
 
       <section className="space-y-14">
         <div>
-          <h2 className="text-2xl font-bold text-gray-800 mb-6">Popular Restaurants</h2>
+          {/* Conditional Header */}
+          <h2 className="text-2xl font-bold text-gray-800 mb-6">
+            {isDisplayingSearchResults ? 'Search Results' : 'Popular Restaurants'}
+          </h2>
           {isLoading ? (
             <div className="flex justify-center items-center h-40">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8 justify-items-center">
-              {/* {restaurants.map((r) => (
-                <RestaurantCard key={r.userId} restaurant={r} />
-              ))} */}
-              {restaurants.map((r) => (
-                <RestaurantCard key={r.userId} restaurant={r} userId={userId} />
-              ))}
-            </div>
+            <>
+              {restaurants.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8 justify-items-center">
+                  {restaurants.map((r) => (
+                    <RestaurantCard key={r.userId} restaurant={r} userId={userId}/>
+                  ))}
+                </div>
+              ) : (
+                // Show this message if displaying search results and no results found
+                // Or if popular list is empty (and not loading)
+                <p className="text-center text-gray-500">
+                    {isDisplayingSearchResults ? "No restaurants found matching your search." : "No popular restaurants to display at the moment."}
+                </p>
+              )}
+            </>
           )}
         </div>
-        {recommendedRestaurants.length > 0 && (
-          <div>
-            <h2 className="text-2xl font-bold text-gray-800 mb-6">Top Picks for You</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8 justify-items-center">
-              {recommendedRestaurants.slice(0,3).map((r) => (
-                // <RestaurantCard key={r.userId} restaurant={r} />
-                <RestaurantCard key={r.userId} restaurant={r} userId={userId} />
-              ))}
+
+        {/* Conditional rendering for Top Picks and New Arrivals */}
+        {!isDisplayingSearchResults && (
+          <>
+            {recommendedRestaurants.length > 0 && (
+              <div>
+                <h2 className="text-2xl font-bold text-gray-800 mb-6">Top Picks for You</h2>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8 justify-items-center">
+                  {recommendedRestaurants.slice(0,3).map((r) => (
+                    <RestaurantCard key={r.userId} restaurant={r} userId={userId} />
+                  ))}
+                </div>
+              </div>
+            )}
+            <div>
+              <h2 className="text-2xl font-bold text-gray-800 mb-6">New Arrivals</h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8 justify-items-center">
+                {(newArrivals.length > 0 ? newArrivals : newArrivalsFallback).map((r) => ( // Added slice for consistency if needed
+                  <RestaurantCard key={r.userId} restaurant={r} userId={userId}/>
+                ))}
+              </div>
             </div>
-          </div>
+          </>
         )}
-        <div>
-          <h2 className="text-2xl font-bold text-gray-800 mb-6">New Arrivals</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8 justify-items-center">
-            {newArrivalsFallback.map((r) => (
-              <RestaurantCard key={r.userId} restaurant={r} userId={userId} />
-            ))}
-          </div>
-        </div>
       </section>
     </main>
   );
