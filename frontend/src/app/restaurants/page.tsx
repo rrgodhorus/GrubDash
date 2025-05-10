@@ -168,7 +168,20 @@ const newArrivalsFallback = [
 ];
 
 
-function RestaurantCard({ restaurant }: { restaurant: Restaurant }) {
+function RestaurantCard({ restaurant, userId }: { restaurant: Restaurant; userId: string; }) {
+    const handleClick = async () => {
+      if (!userId) return;
+  
+      await fetch(`${API_BASE_URL}/interactions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId,
+          itemId: restaurant.userId,
+          eventType: "CLICK"
+        })
+      });
+    };
   return (
     <div className="bg-white rounded-xl shadow-lg w-72 min-w-72 hover:scale-105 transition-transform cursor-pointer border border-orange-100">
       <div className="relative h-40 w-full rounded-t-xl overflow-hidden">
@@ -181,8 +194,29 @@ function RestaurantCard({ restaurant }: { restaurant: Restaurant }) {
           <span className="mr-2">⭐ {restaurant.rating}</span>
           <span>• {restaurant.time || '30-40 min'}</span>
         </div>
-        <Link href={`/restaurants/menu?id=${restaurant.userId}`} passHref>
+        {/* <Link href={`/restaurants/menu?id=${restaurant.userId}`} passHref>
           <button className="mt-2 w-full bg-orange-600 text-white py-1.5 rounded-lg font-semibold hover:bg-orange-700 transition">View Menu</button>
+        </Link> */}
+        <Link
+            href={`/restaurants/menu?id=${restaurant.userId}`}
+            onClick={async () => {
+              if (userId) {
+                await fetch(`${API_BASE_URL}/interactions`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    userId,
+                    itemId: restaurant.userId,
+                    eventType: "CLICK"
+                  })
+                });
+              }
+            }}
+            passHref
+          >
+          <button className="mt-2 w-full bg-orange-600 text-white py-1.5 rounded-lg font-semibold hover:bg-orange-700 transition">
+            View Menu
+          </button>
         </Link>
       </div>
     </div>
@@ -316,8 +350,11 @@ export default function Restaurants() {
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8 justify-items-center">
-              {restaurants.map((r) => (
+              {/* {restaurants.map((r) => (
                 <RestaurantCard key={r.userId} restaurant={r} />
+              ))} */}
+              {restaurants.map((r) => (
+                <RestaurantCard key={r.userId} restaurant={r} userId={userId} />
               ))}
             </div>
           )}
@@ -327,7 +364,8 @@ export default function Restaurants() {
             <h2 className="text-2xl font-bold text-gray-800 mb-6">Top Picks for You</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8 justify-items-center">
               {recommendedRestaurants.map((r) => (
-                <RestaurantCard key={r.userId} restaurant={r} />
+                // <RestaurantCard key={r.userId} restaurant={r} />
+                <RestaurantCard key={r.userId} restaurant={r} userId={userId} />
               ))}
             </div>
           </div>
@@ -336,7 +374,7 @@ export default function Restaurants() {
           <h2 className="text-2xl font-bold text-gray-800 mb-6">New Arrivals</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8 justify-items-center">
             {newArrivalsFallback.map((r) => (
-              <RestaurantCard key={r.userId} restaurant={r} />
+              <RestaurantCard key={r.userId} restaurant={r} userId={userId} />
             ))}
           </div>
         </div>

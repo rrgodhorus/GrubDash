@@ -137,7 +137,30 @@ function CheckoutForm() {
       } else if (result.paymentIntent.status === "succeeded") {
         setSuccess(true);
         localStorage.removeItem("cart");
-      }
+        if (result.paymentIntent.status === "succeeded") {
+          setSuccess(true);
+          localStorage.removeItem("cart");
+        
+          // Track ORDER event
+          if (auth.user?.profile?.sub) {
+            const interactionPayload = {
+              userId: auth.user.profile.sub,
+              itemId: restaurantId, // Treat restaurant as the item being ordered
+              eventType: "ORDER",
+              properties: JSON.stringify({
+                items: items.map(i => ({ id: i.id, qty: i.quantity })),
+                total: total
+              })
+            };
+        
+            await fetch(`${API_BASE}/interactions`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(interactionPayload)
+            });
+          }
+        } 
+      }     
     } catch (e) {
       setError("Something went wrong. Try again.");
     } finally {
