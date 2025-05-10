@@ -73,6 +73,21 @@ async function assignPartner(orderIds, allOrderData) {
 
   scoredPartners.sort((a, b) => b.score - a.score);
 
+  // let partnerId;
+
+  // for (const { partnerId: pid } of scoredPartners) {
+  //   const lockKey = `partner:${pid}:lock`;
+  //   const lockAcquired = await redis.set(lockKey, "1", { NX: true, EX: 5 });
+  //   if (lockAcquired) {
+  //     partnerId = pid;
+  //     break;
+  //   }
+  // }
+
+  // if (!partnerId) {
+  //   console.log("No delivery partner could be locked. Skipping assignment.");
+  //   return;
+  // }
   const best = scoredPartners[0];
 
   if (!best) {
@@ -86,6 +101,8 @@ async function assignPartner(orderIds, allOrderData) {
     await redis.set(`order:${orderId}:assigned`, "1", { EX: 300 });
     await redis.hSet(`partner:${partnerId}:orders`, orderId, "assigned");
   }
+
+  await redis.hSet(`partner:${partnerId}`, "status", "in_delivery");
 
   await redis.zAdd("partner:assignments", [{ score: now, value: partnerId }]);
 
