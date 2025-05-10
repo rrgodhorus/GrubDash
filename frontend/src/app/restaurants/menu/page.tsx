@@ -25,6 +25,8 @@ interface Cart {
 interface CartData {
   items: Cart;
   restaurantId: string;
+  restaurantLocation?: string; // Added location field
+  restaurantName?: string; // Added name field for better user experience
 }
 
 interface Restaurant {
@@ -250,12 +252,14 @@ function MenuContent() {
       const cartData: CartData = {
         items: cart,
         restaurantId: storedRestaurantId || restaurantId || '',
+        restaurantLocation: restaurantData?.location,
+        restaurantName: restaurantData?.name
       };
       localStorage.setItem('cart', JSON.stringify(cartData));
     }, 100); // debounce delay
 
     return () => clearTimeout(timeout); // clear on re-render
-  }, [cart, isHydrated, restaurantId, storedRestaurantId]);
+  }, [cart, isHydrated, restaurantId, storedRestaurantId, restaurantData]);
 
   const handleAddToCart = (item: MenuItem) => {
     // Check if user is trying to add items from a different restaurant

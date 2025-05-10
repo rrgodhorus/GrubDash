@@ -63,6 +63,9 @@ function CheckoutForm() {
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
   const [orderId, setOrderId] = useState<string | null>(null);
+  // Add new state for locations
+  const [deliveryLocation, setDeliveryLocation] = useState<{lat: number, lng: number} | null>(null);
+  const [restaurantLocation, setRestaurantLocation] = useState<{lat: number, lng: number} | null>(null);
 
   useEffect(() => {
     const cartRaw = localStorage.getItem("cart");
@@ -76,6 +79,46 @@ function CheckoutForm() {
       }));
       setItems(parsedItems);
       setRestaurantId(cart.restaurantId);
+      
+      // Get delivery location from localStorage if available
+      const locationRaw = localStorage.getItem("deliveryLocation");
+      if (locationRaw) {
+        try {
+          const location = JSON.parse(locationRaw);
+          setDeliveryLocation(location);
+        } catch (e) {
+          console.error("Failed to parse delivery location:", e);
+        }
+      }
+      
+      // Use restaurant location from cart if available
+      if (cart.restaurantLocation) {
+        try {
+          // Parse location coordinates from the stored string (format: "lat, lng")
+          const [lat, lng] = cart.restaurantLocation.split(',').map(coord => parseFloat(coord.trim()));
+          if (!isNaN(lat) && !isNaN(lng)) {
+            setRestaurantLocation({ lat, lng });
+          }
+        } catch (e) {
+          console.error("Failed to parse restaurant location from cart:", e);
+        }
+      } 
+      // Fallback: Fetch restaurant location if not available in cart
+      else if (cart.restaurantId) {
+        fetch(`${API_BASE}/users/${cart.restaurantId}`)
+          .then(res => res.json())
+          .then(data => {
+            if (data.location_coordinates) {
+              setRestaurantLocation({
+                lat: parseFloat(data.location_coordinates.latitude),
+                lng: parseFloat(data.location_coordinates.longitude)
+              });
+            }
+          })
+          .catch(err => {
+            console.error("Failed to fetch restaurant location:", err);
+          });
+      }
     }
 
     if (userId) {
@@ -116,7 +159,16 @@ function CheckoutForm() {
           customer_id: userId,
           restaurant_id: restaurantId,
           items,
-          save_card: saveCard
+          save_card: saveCard,
+          // Add location data to the order
+          delivery_location: deliveryLocation ? {
+            latitude: deliveryLocation.lat,
+            longitude: deliveryLocation.lng
+          } : null,
+          restaurant_location: restaurantLocation ? {
+            latitude: restaurantLocation.lat,
+            longitude: restaurantLocation.lng
+          } : null
         })
       });
 
