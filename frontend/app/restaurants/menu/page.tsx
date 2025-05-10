@@ -300,7 +300,7 @@ function MenuContent() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         userId: auth.user.profile.sub,
-        itemId: item.id,
+        itemId: restaurantId,
         eventType: "ADD_TO_CART"
       })
     });
