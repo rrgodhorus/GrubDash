@@ -3,18 +3,15 @@ frontend:
   phases:
     preBuild:
       commands:
-        - npm ci --legacy-peer-deps || npm install --legacy-peer-deps
-        - npm cache clean --force
+        - cd frontend
+        - npm install --legacy-peer-deps
     build:
       commands:
-        - echo "Building with Next.js..."
-        - NODE_OPTIONS="--max-old-space-size=4096" npm run build
+        - npm run build
   artifacts:
-    baseDirectory: .next
+    baseDirectory: frontend/.next
     files:
       - '**/*'
   cache:
     paths:
-      - node_modules/**/*
-      - .next/cache/**/*
-
+      - frontend/node_modules/**/*
