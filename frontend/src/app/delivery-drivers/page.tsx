@@ -285,7 +285,7 @@ export default function DeliveryDriversPage() {
       }
       
       // Refresh delivery data after confirmation
-      const deliveriesResponse = await fetch('https://hasbgxp22pykmsxgmrripwf73m0nvhdh.lambda-url.us-east-1.on.aws/');
+      const deliveriesResponse = await fetch('https://hasbgxp22pykmsxgmrripwf73m0nvhdh.lambda-url.us-east-1.on.aws/partners');
       if (deliveriesResponse.ok) {
         const data = await deliveriesResponse.json();
         setDeliveryData(data);
@@ -301,12 +301,86 @@ export default function DeliveryDriversPage() {
     }
   };
 
+  // Handle order pickup
+  const handlePickupDelivery = async (deliveryId: string) => {
+    setPendingDeliveries(prev => new Set([...prev, deliveryId]));
+    try {
+      // Send POST request to update the delivery status to picked up
+      const response = await fetch('https://oye2gwjcumaqxhstqyvszyjssy0mfroe.lambda-url.us-east-1.on.aws/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          delivery_id: deliveryId,
+          status: "dp_order_received"
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to mark delivery as picked up: ${response.status}`);
+      }
+      
+      // Refresh delivery data after marking as picked up
+      const deliveriesResponse = await fetch('https://hasbgxp22pykmsxgmrripwf73m0nvhdh.lambda-url.us-east-1.on.aws/partners');
+      if (deliveriesResponse.ok) {
+        const data = await deliveriesResponse.json();
+        setDeliveryData(data);
+      }
+    } catch (err) {
+      console.error('Error marking delivery as picked up:', err);
+    } finally {
+      setPendingDeliveries(prev => {
+        const newSet = new Set([...prev]);
+        newSet.delete(deliveryId);
+        return newSet;
+      });
+    }
+  };
+
+  // Handle delivery completion
+  const handleCompleteDelivery = async (deliveryId: string) => {
+    setPendingDeliveries(prev => new Set([...prev, deliveryId]));
+    try {
+      // Send POST request to update the delivery status to delivered
+      const response = await fetch('https://oye2gwjcumaqxhstqyvszyjssy0mfroe.lambda-url.us-east-1.on.aws/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          delivery_id: deliveryId,
+          status: "dp_delivered"
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to mark delivery as delivered: ${response.status}`);
+      }
+      
+      // Refresh delivery data after marking as delivered
+      const deliveriesResponse = await fetch('https://hasbgxp22pykmsxgmrripwf73m0nvhdh.lambda-url.us-east-1.on.aws/partners');
+      if (deliveriesResponse.ok) {
+        const data = await deliveriesResponse.json();
+        setDeliveryData(data);
+      }
+    } catch (err) {
+      console.error('Error marking delivery as delivered:', err);
+    } finally {
+      setPendingDeliveries(prev => {
+        const newSet = new Set([...prev]);
+        newSet.delete(deliveryId);
+        return newSet;
+      });
+    }
+  };
+
   // Handle cancel delivery
   const handleCancelDelivery = async (deliveryId: string) => {
     setPendingDeliveries(prev => new Set([...prev, deliveryId]));
     try {
       // Send POST request to update the delivery status to cancelled
-      const response = await fetch('https://oye2gwjcumaqxhstqyvszyjssy0mfroe.lambda-url.us-east-1.on.aws/', {
+      const response = await fetch('https://oye2gwjcumaqxhstqyjssy0mfroe.lambda-url.us-east-1.on.aws/', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -322,7 +396,7 @@ export default function DeliveryDriversPage() {
       }
       
       // Refresh delivery data after cancellation
-      const deliveriesResponse = await fetch('https://hasbgxp22pykmsxgmrripwf73m0nvhdh.lambda-url.us-east-1.on.aws/');
+      const deliveriesResponse = await fetch('https://hasbgxp22pykmsxgmrripwf73m0nvhdh.lambda-url.us-east-1.on.aws/partners');
       if (deliveriesResponse.ok) {
         const data = await deliveriesResponse.json();
         setDeliveryData(data);
@@ -518,7 +592,31 @@ export default function DeliveryDriversPage() {
                             </button>
                           </>
                         )}
-                        {(delivery.status !== "dp_assigned" || !delivery.partner_id) && (
+                        {delivery.status === "dp_confirmed" && delivery.partner_id && (
+                          <button
+                            className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition-colors"
+                            disabled={pendingDeliveries.has(delivery.delivery_id)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handlePickupDelivery(delivery.delivery_id);
+                            }}
+                          >
+                            {pendingDeliveries.has(delivery.delivery_id) ? 'Processing...' : 'Order Picked Up'}
+                          </button>
+                        )}
+                        {delivery.status === "dp_order_received" && delivery.partner_id && (
+                          <button
+                            className="bg-purple-500 text-white px-4 py-2 rounded hover:bg-purple-600 transition-colors"
+                            disabled={pendingDeliveries.has(delivery.delivery_id)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleCompleteDelivery(delivery.delivery_id);
+                            }}
+                          >
+                            {pendingDeliveries.has(delivery.delivery_id) ? 'Processing...' : 'Delivered'}
+                          </button>
+                        )}
+                        {(delivery.status !== "dp_assigned" && delivery.status !== "dp_confirmed" && delivery.status !== "dp_order_received") || !delivery.partner_id && (
                           <span className="text-gray-500">No actions available</span>
                         )}
                       </td>
