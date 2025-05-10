@@ -45,6 +45,29 @@ export default function CheckoutPage() {
 -->
 */
 
+// Define interfaces for better type safety
+interface CartItem {
+  name: string;
+  id: string;
+  quantity: number;
+  price: string;
+}
+
+interface OrderItem {
+  name: string;
+  id: string;
+  quantity: number;
+  unit_price: number;
+}
+
+interface SavedCard {
+  id: string;
+  brand: string;
+  last4: string;
+  exp_month: string;
+  exp_year: string;
+}
+
 function CheckoutForm() {
   const stripe = useStripe();
   const elements = useElements();
@@ -54,9 +77,9 @@ function CheckoutForm() {
   const userId = userProfile?.["cognito:username"];
   const userRole = userProfile?.["custom:user_role"];
 
-  const [items, setItems] = useState<any[]>([]);
+  const [items, setItems] = useState<OrderItem[]>([]);
   const [restaurantId, setRestaurantId] = useState("");
-  const [savedCards, setSavedCards] = useState<any[]>([]);
+  const [savedCards, setSavedCards] = useState<SavedCard[]>([]);
   const [selectedCard, setSelectedCard] = useState("");
   const [saveCard, setSaveCard] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -71,12 +94,16 @@ function CheckoutForm() {
     const cartRaw = localStorage.getItem("cart");
     if (cartRaw) {
       const cart = JSON.parse(cartRaw);
-      const parsedItems = Object.values(cart.items || {}).map((item: any) => ({
-        name: item.name,
-        id: item.id,
-        quantity: item.quantity,
-        unit_price: parseFloat(item.price.replace("$", "")) || 0
-      }));
+      const parsedItems = Object.values(cart.items || {}).map((item: unknown) => {
+        // Cast the unknown item to CartItem with type assertion
+        const cartItem = item as CartItem;
+        return {
+          name: cartItem.name,
+          id: cartItem.id,
+          quantity: cartItem.quantity,
+          unit_price: parseFloat(cartItem.price.replace("$", "")) || 0
+        };
+      });
       setItems(parsedItems);
       setRestaurantId(cart.restaurantId);
       
@@ -95,7 +122,7 @@ function CheckoutForm() {
       if (cart.restaurantLocation) {
         try {
           // Parse location coordinates from the stored string (format: "lat, lng")
-          const [lat, lng] = cart.restaurantLocation.split(',').map(coord => parseFloat(coord.trim()));
+          const [lat, lng] = cart.restaurantLocation.split(',').map((coord: string) => parseFloat(coord.trim()));
           if (!isNaN(lat) && !isNaN(lng)) {
             setRestaurantLocation({ lat, lng });
           }
@@ -190,7 +217,8 @@ function CheckoutForm() {
         setSuccess(true);
         localStorage.removeItem("cart");
       }
-    } catch (e) {
+    } catch (error) {
+      console.error("Payment error:", error);
       setError("Something went wrong. Try again.");
     } finally {
       setLoading(false);
