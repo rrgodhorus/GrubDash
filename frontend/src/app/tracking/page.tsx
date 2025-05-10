@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, Suspense } from "react";
 import { useAuth } from "react-oidc-context";
 import { useRouter, useSearchParams } from "next/navigation";
 import { LoadScript } from "@react-google-maps/api";
@@ -23,7 +23,8 @@ const formatDate = (dateString: string) => {
   return date.toLocaleString();
 };
 
-export default function OrderTrackingPage() {
+// Create a separate component to use the useSearchParams hook
+function OrderTracker() {
   const router = useRouter();
   const auth = useAuth();
   const searchParams = useSearchParams();
@@ -36,10 +37,8 @@ export default function OrderTrackingPage() {
   const refreshInterval = useRef<NodeJS.Timeout | null>(null);
   const [deliveryDetails, setDeliveryDetails] = useState<any>(null);
   const [showDebug, setShowDebug] = useState<boolean>(false);
-  // Add state to store the estimated delivery time from the map component
   const [estimatedDeliveryTime, setEstimatedDeliveryTime] = useState<string>('30-45 minutes');
 
-  // Function to fetch delivery details for an order
   const fetchDeliveryDetails = async (deliveryId: string) => {
     try {
       const response = await fetch(`https://hasbgxp22pykmsxgmrripwf73m0nvhdh.lambda-url.us-east-1.on.aws/partners/${deliveryId}`);
@@ -53,11 +52,9 @@ export default function OrderTrackingPage() {
       setDeliveryDetails({ ...data, lastFetchTime: Date.now() });
     } catch (err: any) {
       console.error("Error fetching delivery details:", err);
-      // Don't set error state here, we'll just have partial data
     }
   };
 
-  // Function to fetch restaurant details
   const fetchRestaurantDetails = async (restaurantId: string) => {
     try {
       const response = await fetch(`${API_BASE}/users/${restaurantId}`);
@@ -70,11 +67,9 @@ export default function OrderTrackingPage() {
       setRestaurant(data);
     } catch (err: any) {
       console.error("Error fetching restaurant:", err);
-      // Don't set error state here, we'll just have partial data
     }
   };
 
-  // Function to fetch order details
   const fetchOrderDetails = async (id: string, userId: string | undefined) => {
     try {
       setLoading(true);
@@ -86,7 +81,6 @@ export default function OrderTrackingPage() {
       
       const data = await response.json();
       
-      // Verify this order belongs to the current user
       if (userId && data.customer_id !== userId) {
         setError("You don't have permission to view this order");
         setOrder(null);
@@ -94,13 +88,10 @@ export default function OrderTrackingPage() {
         setOrder(data);
         setError(null);
         
-        // Fetch restaurant details if we have a restaurant_id
         if (data.restaurant_id) {
           await fetchRestaurantDetails(data.restaurant_id);
         }
 
-        // If order has a delivery_id and status is ready for delivery, fetch delivery details
-        // Only fetch if we don't already have delivery details or it's been more than 60 seconds since last fetch
         const shouldFetchDeliveryDetails = data.delivery_id && 
           (data.status === 'ready_for_delivery' || getDisplayStatus(data.status) === ORDER_STATUS.READY) &&
           (!deliveryDetails || !deliveryDetails.lastFetchTime || (Date.now() - deliveryDetails.lastFetchTime) > 60000);
@@ -108,7 +99,6 @@ export default function OrderTrackingPage() {
         if (shouldFetchDeliveryDetails) {
           await fetchDeliveryDetails(data.delivery_id);
         } else if (!data.delivery_id || !(data.status === 'ready_for_delivery' || getDisplayStatus(data.status) === ORDER_STATUS.READY)) {
-          // Reset delivery details if not applicable
           setDeliveryDetails(null);
         }
       }
@@ -134,9 +124,7 @@ export default function OrderTrackingPage() {
       
       const data = await response.json();
       
-      // If we have orders, set the most recent one
       if (data && data.length > 0) {
-        // Sort by date descending
         const sortedOrders = data.sort((a: any, b: any) => 
           new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
         );
@@ -153,9 +141,7 @@ export default function OrderTrackingPage() {
     }
   };
 
-  // Initial load of order details
   useEffect(() => {
-    // Redirect non-customers to appropriate pages
     if (auth.isAuthenticated) {
       const role = auth.user?.profile["custom:user_role"];
       if (role === "restaurant") {
@@ -167,49 +153,13 @@ export default function OrderTrackingPage() {
       }
     }
 
-    // Fetch the order data if we have an order ID
     if (orderId && auth.isAuthenticated) {
-      const userId = auth.user?.profile["cognito:username"];
+      const userId = auth.user?.profile["cognito:username"] as string | undefined;
       fetchOrderDetails(orderId, userId);
     } else if (!orderId) {
-      // If no order ID, try to get recent orders
       fetchRecentOrders();
     }
   }, [orderId, auth.isAuthenticated, auth.user?.profile]);
-
-  // Set up polling for order status updates
-  // useEffect(() => {
-  //   // Don't set up polling if we don't have an order or user authentication
-  //   if (!orderId || !auth.isAuthenticated) return;
-    
-  //   const userId = auth.user?.profile["cognito:username"];
-
-  //   // Clear any existing interval first to prevent duplicates
-  //   if (refreshInterval.current) {
-  //     clearInterval(refreshInterval.current);
-  //   }
-
-  //   // Only poll if the order is in an active state
-  //   if (order && !isOrderCompleted(order.status)) {
-  //     // Set up interval to refresh order data every 30 seconds
-  //     const interval = setInterval(() => {
-  //       fetchOrderDetails(orderId, userId);
-  //     }, 30000); // 30 seconds
-      
-  //     refreshInterval.current = interval;
-  //   } else if (refreshInterval.current && isOrderCompleted(order?.status)) {
-  //     // Clear polling when order is in a completed state
-  //     clearInterval(refreshInterval.current);
-  //     refreshInterval.current = null;
-  //   }
-    
-  //   // Clean up on unmount
-  //   return () => {
-  //     if (refreshInterval.current) {
-  //       clearInterval(refreshInterval.current);
-  //     }
-  //   };
-  // }, [orderId, auth.isAuthenticated, order?.status]); // Reduced dependencies
 
   if (loading) {
     return (
@@ -257,7 +207,6 @@ export default function OrderTrackingPage() {
     );
   }
 
-  // Calculate progress percentage
   const progressPercentage = getProgressPercentage(order.status);
   
   return (
@@ -268,9 +217,7 @@ export default function OrderTrackingPage() {
           <p className="opacity-90">Order #{order.order_id || order.orderId}</p>
         </div>
         
-        {/* Progress bar */}
         <div className="p-6">
-          {/* Debug info - hidden by default */}
           <div className="mb-4">
             <button 
               onClick={() => setShowDebug(!showDebug)}
@@ -303,7 +250,6 @@ export default function OrderTrackingPage() {
             </div>
           </div>
           
-          {/* Order details */}
           <div className="border-t border-gray-200 pt-6 mb-6">
             <h2 className="text-xl font-bold mb-4">Order Details</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -332,7 +278,6 @@ export default function OrderTrackingPage() {
             </div>
           </div>
           
-          {/* Order items */}
           <div className="border-t border-gray-200 pt-6">
             <h2 className="text-xl font-bold mb-4">Order Items</h2>
             {order.items && order.items.length > 0 ? (
@@ -369,11 +314,9 @@ export default function OrderTrackingPage() {
           </div>
         </div>
         
-        {/* Map component */}
         <div className="p-6 border-t border-gray-200">
           <h2 className="text-xl font-bold mb-4">Order Location Tracking</h2>
           
-          {/* Conditional rendering of map based on order status */}
           {(getDisplayStatus(order.status) === ORDER_STATUS.IN_DELIVERY || getDisplayStatus(order.status) === ORDER_STATUS.READY) && deliveryDetails ? (
             <LoadScript googleMapsApiKey={GOOGLE_MAPS_API_KEY}>
               <DeliveryRouteMap 
@@ -383,7 +326,6 @@ export default function OrderTrackingPage() {
             </LoadScript>
           ) : getDisplayStatus(order.status) === ORDER_STATUS.IN_DELIVERY || getDisplayStatus(order.status) === ORDER_STATUS.READY ? (
             <LoadScript googleMapsApiKey={GOOGLE_MAPS_API_KEY}>
-              {/* Use restaurant location data from the restaurant object if available */}
               {((restaurant && restaurant.location) || order.restaurant_location) && order.delivery_location ? (
                 <MapComponent 
                   restaurantLocation={restaurant?.location || order.restaurant_location} 
@@ -412,4 +354,12 @@ export default function OrderTrackingPage() {
       </div>
     </main> 
   )
+}
+
+export default function OrderTrackingPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <OrderTracker />
+    </Suspense>
+  );
 }

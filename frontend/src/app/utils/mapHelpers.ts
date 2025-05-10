@@ -1,4 +1,8 @@
-import { LatLngLiteral } from "@react-google-maps/api";
+// Define our own LatLngLiteral interface to match Google Maps structure
+export interface LatLngLiteral {
+  lat: number;
+  lng: number;
+}
 
 // Default map center (NYC)
 export const defaultCenter = {
