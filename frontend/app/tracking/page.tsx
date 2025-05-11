@@ -70,9 +70,9 @@ function OrderTracker() {
     }
   };
 
-  const fetchOrderDetails = async (id: string, userId: string | undefined) => {
+  const fetchOrderDetails = async (id: string, userId: string | undefined, quietFetch = false) => {
     try {
-      setLoading(true);
+      if (!quietFetch) setLoading(true);
       const response = await fetch(`${API_BASE}/orders/${id}`);
       
       if (!response.ok) {
@@ -85,28 +85,42 @@ function OrderTracker() {
         setError("You don't have permission to view this order");
         setOrder(null);
       } else {
+        // If the order has a delivery_id, update status to indicate delivery partner assigned
+        if (data.delivery_id && data.status !== 'delivered' && data.status !== 'order_cancelled') {
+          data.status = 'delivery_partner_assigned';
+        }
+        
         setOrder(data);
         setError(null);
         
-        if (data.restaurant_id) {
+        // Fetch restaurant details only if we don't already have them
+        if (data.restaurant_id && !restaurant) {
           await fetchRestaurantDetails(data.restaurant_id);
         }
 
         const shouldFetchDeliveryDetails = data.delivery_id && 
-          (data.status === 'ready_for_delivery' || getDisplayStatus(data.status) === ORDER_STATUS.READY) &&
+          (data.status === 'ready_for_delivery' || data.status === 'delivery_partner_assigned' || getDisplayStatus(data.status) === ORDER_STATUS.READY) &&
           (!deliveryDetails || !deliveryDetails.lastFetchTime || (Date.now() - deliveryDetails.lastFetchTime) > 60000);
         
         if (shouldFetchDeliveryDetails) {
           await fetchDeliveryDetails(data.delivery_id);
-        } else if (!data.delivery_id || !(data.status === 'ready_for_delivery' || getDisplayStatus(data.status) === ORDER_STATUS.READY)) {
+        } else if (!data.delivery_id || !(data.status === 'ready_for_delivery' || data.status === 'delivery_partner_assigned' || getDisplayStatus(data.status) === ORDER_STATUS.READY)) {
           setDeliveryDetails(null);
+        }
+        
+        // Check if delivery partner has picked up the order (status: dp_order_received)
+        if (deliveryDetails && deliveryDetails.status === "dp_order_received" && data.status !== 'delivered' && data.status !== 'order_cancelled') {
+          data.status = 'order_picked_up';
+          setOrder({...data});
         }
       }
     } catch (err: any) {
       console.error("Error fetching order:", err);
-      setError(err.message || "Failed to load order details");
+      if (!quietFetch) {
+        setError(err.message || "Failed to load order details");
+      }
     } finally {
-      setLoading(false);
+      if (!quietFetch) setLoading(false);
     }
   };
 
@@ -156,9 +170,21 @@ function OrderTracker() {
     if (orderId && auth.isAuthenticated) {
       const userId = auth.user?.profile["cognito:username"] as string | undefined;
       fetchOrderDetails(orderId, userId);
+      
+      // Set up polling for automatic silent refreshes every 30 seconds
+      refreshInterval.current = setInterval(() => {
+        fetchOrderDetails(orderId, userId, true);
+      }, 5000);
     } else if (!orderId) {
       fetchRecentOrders();
     }
+
+    // Clean up interval on component unmount
+    return () => {
+      if (refreshInterval.current) {
+        clearInterval(refreshInterval.current);
+      }
+    };
   }, [orderId, auth.isAuthenticated, auth.user?.profile]);
 
   if (loading) {
@@ -317,14 +343,20 @@ function OrderTracker() {
         <div className="p-6 border-t border-gray-200">
           <h2 className="text-xl font-bold mb-4">Order Location Tracking</h2>
           
-          {(getDisplayStatus(order.status) === ORDER_STATUS.IN_DELIVERY || getDisplayStatus(order.status) === ORDER_STATUS.READY) && deliveryDetails ? (
+          {(getDisplayStatus(order.status) === ORDER_STATUS.IN_DELIVERY || 
+            getDisplayStatus(order.status) === ORDER_STATUS.READY || 
+            getDisplayStatus(order.status) === ORDER_STATUS.DELIVERY_PARTNER_ASSIGNED ||
+            getDisplayStatus(order.status) === ORDER_STATUS.ORDER_PICKED_UP) && deliveryDetails ? (
             <LoadScript googleMapsApiKey={GOOGLE_MAPS_API_KEY}>
               <DeliveryRouteMap 
                 deliveryDetails={deliveryDetails} 
                 onEstimatedDeliveryTimeChange={setEstimatedDeliveryTime}
               />
             </LoadScript>
-          ) : getDisplayStatus(order.status) === ORDER_STATUS.IN_DELIVERY || getDisplayStatus(order.status) === ORDER_STATUS.READY ? (
+          ) : getDisplayStatus(order.status) === ORDER_STATUS.IN_DELIVERY || 
+               getDisplayStatus(order.status) === ORDER_STATUS.READY || 
+               getDisplayStatus(order.status) === ORDER_STATUS.DELIVERY_PARTNER_ASSIGNED ||
+               getDisplayStatus(order.status) === ORDER_STATUS.ORDER_PICKED_UP ? (
             <LoadScript googleMapsApiKey={GOOGLE_MAPS_API_KEY}>
               {((restaurant && restaurant.location) || order.restaurant_location) && order.delivery_location ? (
                 <MapComponent 

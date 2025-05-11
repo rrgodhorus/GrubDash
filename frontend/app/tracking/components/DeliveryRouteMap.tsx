@@ -312,6 +312,12 @@ const DeliveryRouteMap: React.FC<DeliveryRouteMapProps> = ({
       return;
     }
 
+    // Skip route recalculation if there's an active live tracking or simulation
+    // This prevents the route from being redrawn during active tracking
+    if (isLiveTracking || isSimulating) {
+      return;
+    }
+
     // Store reference to this delivery details object for future comparison
     processedDeliveryDetails.current = deliveryDetails;
 
@@ -371,7 +377,7 @@ const DeliveryRouteMap: React.FC<DeliveryRouteMapProps> = ({
               setDirections(result);
               setDirectionsError(null);
               
-              // Extract and store route coordinates for simulation
+              // Extract and store route coordinates for distance calculations
               const coordinates = extractRouteCoordinates(result);
               setRouteCoordinates(coordinates);
               
@@ -388,7 +394,7 @@ const DeliveryRouteMap: React.FC<DeliveryRouteMapProps> = ({
       console.error("Error calculating directions:", error);
       setDirectionsError("Error calculating directions");
     }
-  }, [deliveryDetails]);
+  }, [deliveryDetails, isLiveTracking, isSimulating, deliveryPartnerLocation]);
 
   // Function to send simulation payload to the endpoint
   const sendSimulationPayload = useCallback(async () => {
@@ -598,25 +604,6 @@ const DeliveryRouteMap: React.FC<DeliveryRouteMapProps> = ({
               Stop Live Tracking
             </button>
           )}
-          
-          {/* Simulation buttons - Only show if not live tracking */}
-          {!isLiveTracking && routeCoordinates.length > 0 && (
-            !isSimulating ? (
-              <button 
-                onClick={startSimulation}
-                className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded-md text-sm shadow"
-              >
-                Simulate Driver Movement
-              </button>
-            ) : (
-              <button 
-                onClick={stopSimulation}
-                className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded-md text-sm shadow"
-              >
-                Stop Simulation
-              </button>
-            )
-          )}
         </div>
       )}
       
@@ -657,12 +644,12 @@ const DeliveryRouteMap: React.FC<DeliveryRouteMapProps> = ({
           </div>
           <span>Delivery Driver</span>
         </div>
-        <div className="flex items-center mb-1 text-xs">
+        {/* <div className="flex items-center mb-1 text-xs">
           <div className="flex items-center justify-center h-5 w-5 rounded-full bg-white border border-gray-300 text-red-600 font-bold mr-2">
             A
           </div>
           <span>Starting Point</span>
-        </div>
+        </div> */}
         {/* <div className="flex items-center mb-1 text-xs">
           <div className="flex items-center justify-center h-5 w-5 rounded-full bg-white border border-gray-300 text-red-600 font-bold mr-2">
             B
@@ -675,12 +662,12 @@ const DeliveryRouteMap: React.FC<DeliveryRouteMapProps> = ({
           </div>
           <span>Delivery Locations</span>
         </div> */}
-        <div className="flex items-center text-xs">
+        {/* <div className="flex items-center text-xs">
           <div className="flex items-center justify-center h-5 w-5 rounded-full bg-white border border-gray-300 text-red-600 font-bold mr-2">
             F
           </div>
           <span>Final Destination</span>
-        </div>
+        </div> */}
       </div>
     </div>
   );
