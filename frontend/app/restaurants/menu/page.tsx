@@ -497,7 +497,7 @@ function MenuContent() {
             <span className="mr-3">•</span>
             <span>{restaurantData?.address}</span>
           </div>
-          <div className="flex items-center mt-2 text-sm">
+          {/* <div className="flex items-center mt-2 text-sm">
             <span className="mr-4">
               <span className="font-semibold">Delivery:</span> {restaurantData?.deliveryTime}
             </span>
@@ -507,7 +507,7 @@ function MenuContent() {
             <span>
               <span className="font-semibold">Ready in:</span> {restaurantData?.pickupTime}
             </span>
-          </div>
+          </div> */}
         </div>
       </div>
 

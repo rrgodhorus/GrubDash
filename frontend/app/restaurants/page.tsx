@@ -233,7 +233,7 @@ function RestaurantCard({ restaurant, userId }: { restaurant: Restaurant; userId
         <div className="text-sm text-gray-600 mb-2">{restaurant.cuisine || 'Various'}</div>
         <div className="flex items-center text-sm text-gray-700 mb-1">
           <span className="mr-2">⭐ {restaurant.rating}</span>
-          <span>• {restaurant.time || '30-40 min'}</span>
+          {/* <span>• {restaurant.time || '30-40 min'}</span> */}
         </div>
         <Link
             href={`/restaurants/menu?id=${restaurant.userId}`}
@@ -351,7 +351,7 @@ export default function Restaurants() {
   };
 
   const geocodeAddress = async (address: string): Promise<void> => {
-    const apiKey = process.env.NEXT_PUBLIC_Maps_API_KEY;
+    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
     try {
       const response = await fetch(
         `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${apiKey}`
@@ -376,7 +376,7 @@ export default function Restaurants() {
   };
 
   const reverseGeocode = (lat: number, lng: number): Promise<string> => {
-    const apiKey = process.env.NEXT_PUBLIC_Maps_API_KEY;
+    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
     return fetch(
       `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${apiKey}`
     )
@@ -385,6 +385,7 @@ export default function Restaurants() {
         if (data.status === "OK") {
           return data.results[0].formatted_address;
         } else {
+          console.log(data);
           throw new Error("Geocoding failed");
         }
       });
